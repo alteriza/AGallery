@@ -25,8 +25,9 @@ val LocalHazeState = compositionLocalOf<HazeState?> { null }
 @Composable
 fun glassHazeStyle(alpha: Float = 0.15f): HazeStyle {
     val g = LocalGlassColors.current
-    return HazeStyle.Default.copy(
-        backgroundColor = g.bgTop.copy(alpha = alpha)
+    return HazeStyle(
+        backgroundColor = g.bgTop.copy(alpha = alpha),
+        tint = null
     )
 }
 
