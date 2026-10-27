@@ -8,7 +8,9 @@ import androidx.room.PrimaryKey
 data class AlbumEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val name: String,
+    val bucketId: String? = null,
     val coverUri: String? = null,
+    val isPinned: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )
 
