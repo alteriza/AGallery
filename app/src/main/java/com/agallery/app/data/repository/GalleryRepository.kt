@@ -43,6 +43,16 @@ class GalleryRepository(
         }
     }
 
+    suspend fun removeFromTrashDb(uriString: String) = withContext(Dispatchers.IO) {
+        db.trashDao().remove(uriString)
+    }
+
+    suspend fun deleteFileDirect(uriString: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            context.contentResolver.delete(Uri.parse(uriString), null, null) > 0
+        }.getOrDefault(false)
+    }
+    
     suspend fun setPinned(albumId: Long, pinned: Boolean) = withContext(Dispatchers.IO) {
         db.albumDao().setPinned(albumId, pinned)
     }
