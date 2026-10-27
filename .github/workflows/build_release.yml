@@ -29,85 +29,72 @@ jobs:
       # 1. Generate launcher icons dari icon.png di root repo
       # ------------------------------------------------------------
       - name: Generate launcher icons
-        timeout-minutes: 5
+        timeout-minutes: 3
         run: |
           set -e
-          ICON="icon.png"
-          if [ ! -f "$ICON" ]; then
-            echo "❌ icon.png tidak ditemukan di root repo."
-            exit 1
-          fi
+          ls -lh icon.png
+          file icon.png
 
-          # --- Info file dulu, biar kelihatan kalau icon.png-nya raksasa ---
-          ls -lh "$ICON"
-          file "$ICON" || true
+          python3 -m pip install --quiet --disable-pip-version-check Pillow
 
-          # --- Cari tool ImageMagick yang tersedia (IM7 = magick, IM6 = convert) ---
-          IM=""
-          if command -v magick >/dev/null 2>&1; then
-            IM="magick"
-            echo "✅ Pakai pre-installed ImageMagick 7 (magick)"
-          elif command -v convert >/dev/null 2>&1; then
-            IM="convert"
-            echo "✅ Pakai pre-installed ImageMagick 6 (convert)"
-          else
-            echo "🔧 ImageMagick tidak ditemukan, install dengan verbose output..."
-            sudo apt-get update
-            sudo apt-get install -y imagemagick
-            if command -v magick >/dev/null 2>&1; then
-              IM="magick"
-            else
-              IM="convert"
-            fi
-            echo "✅ Terinstall: $IM"
-          fi
+          python3 <<'PY'
+          from PIL import Image
+          import os
 
-          # --- Verifikasi file terbaca ImageMagick ---
-          "$IM" identify "$ICON"
+          SRC = "icon.png"
+          RES = "app/src/main/res"
 
-          RES="app/src/main/res"
-          mkdir -p "$RES"/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}
-          mkdir -p "$RES"/mipmap-anydpi-v26
-          mkdir -p "$RES"/values
+          # density: (legacy_px, foreground_px, canvas_px)
+          SIZES = {
+              "mdpi":    (48,  72,  108),
+              "hdpi":    (72,  108, 162),
+              "xhdpi":   (96,  144, 216),
+              "xxhdpi":  (144, 216, 324),
+              "xxxhdpi": (192, 288, 432),
+          }
 
-          # --- Legacy launcher icons ---
-          "$IM" "$ICON" -resize 48x48   "$RES/mipmap-mdpi/ic_launcher.png"
-          "$IM" "$ICON" -resize 72x72   "$RES/mipmap-hdpi/ic_launcher.png"
-          "$IM" "$ICON" -resize 96x96   "$RES/mipmap-xhdpi/ic_launcher.png"
-          "$IM" "$ICON" -resize 144x144 "$RES/mipmap-xxhdpi/ic_launcher.png"
-          "$IM" "$ICON" -resize 192x192 "$RES/mipmap-xxxhdpi/ic_launcher.png"
+          img = Image.open(SRC).convert("RGBA")
+          print(f"Source: {img.size[0]}x{img.size[1]}")
 
-          # --- Round icons ---
-          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            cp "$RES/mipmap-$d/ic_launcher.png" "$RES/mipmap-$d/ic_launcher_round.png"
-          done
+          for dpi, (legacy, fg_size, fg_canvas) in SIZES.items():
+              d = f"{RES}/mipmap-{dpi}"
+              os.makedirs(d, exist_ok=True)
 
-          # --- Adaptive foreground (safe zone) ---
-          "$IM" "$ICON" -resize 72x72   -gravity center -background none -extent 108x108 "$RES/mipmap-mdpi/ic_launcher_foreground.png"
-          "$IM" "$ICON" -resize 108x108 -gravity center -background none -extent 162x162 "$RES/mipmap-hdpi/ic_launcher_foreground.png"
-          "$IM" "$ICON" -resize 144x144 -gravity center -background none -extent 216x216 "$RES/mipmap-xhdpi/ic_launcher_foreground.png"
-          "$IM" "$ICON" -resize 216x216 -gravity center -background none -extent 324x324 "$RES/mipmap-xxhdpi/ic_launcher_foreground.png"
-          "$IM" "$ICON" -resize 288x288 -gravity center -background none -extent 432x432 "$RES/mipmap-xxxhdpi/ic_launcher_foreground.png"
+              # Legacy (square) — dipakai juga untuk round
+              img.resize((legacy, legacy), Image.LANCZOS).save(f"{d}/ic_launcher.png")
+              img.resize((legacy, legacy), Image.LANCZOS).save(f"{d}/ic_launcher_round.png")
 
-          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
+              # Adaptive foreground: 66% di tengah canvas
+              fg = img.resize((fg_size, fg_size), Image.LANCZOS)
+              canvas = Image.new("RGBA", (fg_canvas, fg_canvas), (0, 0, 0, 0))
+              off = (fg_canvas - fg_size) // 2
+              canvas.paste(fg, (off, off), fg)
+              canvas.save(f"{d}/ic_launcher_foreground.png")
+
+          # Adaptive XML
+          xml = '''<?xml version="1.0" encoding="utf-8"?>
           <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
               <background android:drawable="@color/ic_launcher_background"/>
               <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
           </adaptive-icon>
-          XML
-          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" \
-             "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+          '''.lstrip()
 
-          cat > "$RES/values/ic_launcher_background.xml" <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
+          os.makedirs(f"{RES}/mipmap-anydpi-v26", exist_ok=True)
+          for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
+              with open(f"{RES}/mipmap-anydpi-v26/{name}", "w") as f:
+                  f.write(xml)
+
+          # Background color
+          os.makedirs(f"{RES}/values", exist_ok=True)
+          with open(f"{RES}/values/ic_launcher_background.xml", "w") as f:
+              f.write('''<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="ic_launcher_background">#7C5CFF</color>
           </resources>
-          XML
+          '''.lstrip())
 
-          echo "✅ Launcher icons berhasil di-generate dari $ICON"
-
+          print("✅ Icons generated")
+          PY
       # ------------------------------------------------------------
       # 2. Setup signing: pakai secret kalau ada, generate kalau belum
       # ------------------------------------------------------------
