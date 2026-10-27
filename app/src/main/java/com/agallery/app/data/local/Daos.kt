@@ -9,17 +9,28 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface AlbumDao {
 
-    @Query(
-        """
+    @Query("""
         SELECT albums.*, 
           (SELECT COUNT(*) FROM album_photos WHERE album_photos.albumId = albums.id) AS photoCount
-        FROM albums ORDER BY albums.createdAt DESC
-        """
-    )
+        FROM albums 
+        ORDER BY albums.isPinned DESC, albums.createdAt DESC
+    """)
     fun observeAlbums(): Flow<List<AlbumWithCount>>
+
+    @Query("SELECT * FROM albums WHERE bucketId = :bucketId LIMIT 1")
+    suspend fun findByBucket(bucketId: String): AlbumEntity?
+
+    @Query("UPDATE albums SET isPinned = :pinned WHERE id = :id")
+    suspend fun setPinned(id: Long, pinned: Boolean)
+
+    @Query("SELECT * FROM album_photos")
+    fun observeAllRefs(): Flow<List<AlbumPhotoEntity>>
 
     @Insert
     suspend fun insert(album: AlbumEntity): Long
+
+    @Insert
+    suspend fun insertIgnore(album: AlbumEntity): Long
 
     @Query("DELETE FROM albums WHERE id = :id")
     suspend fun deleteAlbum(id: Long)
