@@ -23,9 +23,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,13 +42,18 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.agallery.app.data.model.Photo
 import com.agallery.app.ui.GalleryViewModel
+import com.agallery.app.ui.components.LocalHazeState
 import com.agallery.app.ui.components.glass
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 @Composable
 fun PhotoViewerScreen(
@@ -58,50 +64,62 @@ fun PhotoViewerScreen(
     onEdit: (String) -> Unit
 ) {
     val photos by vm.viewerPhotos(albumId).collectAsState()
+    val localHazeState = remember { HazeState() }
 
-    if (photos.isEmpty()) {
-        Box(
-            Modifier.fillMaxSize().background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(color = Color.White)
+    CompositionLocalProvider(LocalHazeState provides localHazeState) {
+        if (photos.isEmpty()) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = Color.White)
+            }
+        } else {
+            val safeStart = startIndex.coerceIn(0, photos.size - 1)
+            ViewerContent(
+                photos = photos,
+                startIndex = safeStart,
+                hazeState = localHazeState,
+                onBack = onBack,
+                onEdit = onEdit,
+                onDelete = { photo ->
+                    vm.moveToTrash(photo)
+                    onBack()
+                }
+            )
         }
-        return
     }
-
-    ViewerContent(
-        photos = photos,
-        startIndex = startIndex.coerceIn(0, photos.size - 1),
-        onBack = onBack,
-        onEdit = onEdit,
-        onDelete = { photo ->
-            vm.moveToTrash(photo)
-            onBack()
-        }
-    )
 }
 
 @Composable
 private fun ViewerContent(
     photos: List<Photo>,
     startIndex: Int,
+    hazeState: HazeState,
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
     onDelete: (Photo) -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = startIndex) { photos.size }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .hazeSource(hazeState)
+    ) {
         HorizontalPager(
             state = pagerState,
-            key = { photos[it].uri.toString() },
+            key = { page -> photos.getOrNull(page)?.uri?.toString() ?: "page_$page" },
             modifier = Modifier.fillMaxSize()
         ) { page ->
-            val photo = photos.getOrNull(page) ?: return@HorizontalPager
-            if (photo.isVideo) {
-                VideoPlayer(photo = photo, isActive = page == pagerState.currentPage)
-            } else {
-                ZoomableImage(photo)
+            val photo = photos.getOrNull(page)
+            if (photo != null) {
+                if (photo.isVideo) {
+                    VideoPlayer(photo = photo, isActive = page == pagerState.currentPage)
+                } else {
+                    ZoomableImage(photo)
+                }
             }
         }
 
@@ -153,7 +171,8 @@ private fun ZoomableImage(photo: Photo) {
                 detectTapGestures(
                     onDoubleTap = {
                         if (scale > 1f) {
-                            scale = 1f; offset = Offset.Zero
+                            scale = 1f
+                            offset = Offset.Zero
                         } else {
                             scale = 2.5f
                         }
@@ -180,10 +199,18 @@ private fun ZoomableImage(photo: Photo) {
 @Composable
 private fun VideoPlayer(photo: Photo, isActive: Boolean) {
     val context = LocalContext.current
-    val exo = remember(photo.uri.toString(), isActive) {
+
+    val exo = remember(photo.uri, isActive) {
         if (!isActive) null
         else runCatching {
             ExoPlayer.Builder(context).build().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(C.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                        .build(),
+                    true
+                )
                 setMediaItem(MediaItem.fromUri(photo.uri))
                 prepare()
                 playWhenReady = true
@@ -192,9 +219,7 @@ private fun VideoPlayer(photo: Photo, isActive: Boolean) {
     }
 
     DisposableEffect(exo) {
-        onDispose {
-            runCatching { exo?.release() }
-        }
+        onDispose { runCatching { exo?.release() } }
     }
 
     if (exo != null) {
@@ -202,11 +227,11 @@ private fun VideoPlayer(photo: Photo, isActive: Boolean) {
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 PlayerView(ctx).apply {
-                    player = exo
                     useController = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 }
-            }
+            },
+            update = { view -> view.player = exo }
         )
     } else {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
