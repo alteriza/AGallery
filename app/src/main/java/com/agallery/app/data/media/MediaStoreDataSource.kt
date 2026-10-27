@@ -10,13 +10,13 @@ import com.agallery.app.data.model.Photo
 class MediaStoreDataSource(private val context: Context) {
 
     fun queryMedia(): List<Photo> {
-        val images = queryCollection(
+        val images = safeQuery(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
             else MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             isVideo = false
         )
-        val videos = queryCollection(
+        val videos = safeQuery(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
             else MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
@@ -25,8 +25,11 @@ class MediaStoreDataSource(private val context: Context) {
         return (images + videos).sortedByDescending { it.dateTaken }
     }
 
+    private fun safeQuery(collection: Uri, isVideo: Boolean): List<Photo> =
+        runCatching { queryCollection(collection, isVideo) }.getOrDefault(emptyList())
+
     private fun queryCollection(collection: Uri, isVideo: Boolean): List<Photo> {
-        val projection = arrayOf(
+        val base = arrayOf(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.DISPLAY_NAME,
             MediaStore.MediaColumns.DATE_TAKEN,
@@ -37,13 +40,11 @@ class MediaStoreDataSource(private val context: Context) {
             MediaStore.MediaColumns.BUCKET_ID,
             MediaStore.MediaColumns.BUCKET_DISPLAY_NAME
         )
-        val durationCol = if (isVideo) "duration" else null
-        val fullProjection = if (durationCol != null) projection + durationCol else projection
-
+        val projection = if (isVideo) base + "duration" else base
         val sortOrder = "${MediaStore.MediaColumns.DATE_ADDED} DESC"
         val result = mutableListOf<Photo>()
 
-        context.contentResolver.query(collection, fullProjection, null, null, sortOrder)?.use { c ->
+        context.contentResolver.query(collection, projection, null, null, sortOrder)?.use { c ->
             val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
             val nameCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
             val takenCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_TAKEN)
@@ -53,7 +54,7 @@ class MediaStoreDataSource(private val context: Context) {
             val hCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
             val bucketIdCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_ID)
             val bucketCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
-            val durCol = durationCol?.let { c.getColumnIndex(it) } ?: -1
+            val durCol = if (isVideo) c.getColumnIndex("duration") else -1
 
             while (c.moveToNext()) {
                 val id = c.getLong(idCol)
