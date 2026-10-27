@@ -51,11 +51,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.agallery.app.ui.components.glassHazeStyle
 import com.agallery.app.data.model.Photo
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.LocalHazeState
 import com.agallery.app.ui.theme.LocalGlassColors
-import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -148,9 +148,7 @@ private fun ViewerContent(
                 .fillMaxWidth()
                 .hazeEffect(
                     state = hazeState,
-                    style = HazeStyle(
-                        backgroundColor = LocalGlassColors.current.bgTop.copy(alpha = 0.15f)
-                    )
+                    style = glassHazeStyle()
                 )
                 .background(LocalGlassColors.current.bgTop.copy(alpha = 0.35f))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
