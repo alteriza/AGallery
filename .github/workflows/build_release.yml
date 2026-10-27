@@ -198,9 +198,9 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          accept-android-sdk-licenses: false   # kita handle manual di step bawah
+          accept-android-sdk-licenses: false
           log-accepted-android-sdk-licenses: false
-          packages: 'platform-tools'           # buang 'tools' yang sudah obsolete
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
       # ------------------------------------------------------------
       # Terima lisensi secara non-interaktif
