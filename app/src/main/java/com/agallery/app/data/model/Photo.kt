@@ -10,5 +10,17 @@ data class Photo(
     val size: Long,
     val width: Int,
     val height: Int,
-    val bucket: String
+    val bucketId: String,
+    val bucket: String,
+    val isVideo: Boolean = false,
+    val duration: Long = 0L
+)
+
+data class AlbumUi(
+    val id: Long,
+    val name: String,
+    val bucketId: String?,
+    val photoCount: Int,
+    val isPinned: Boolean,
+    val thumbnails: List<Uri>
 )
