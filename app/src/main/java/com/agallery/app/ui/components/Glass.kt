@@ -1,6 +1,5 @@
 package com.agallery.app.ui.components
 
-import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -8,32 +7,35 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.agallery.app.ui.theme.LocalGlassColors
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 
-/**
- * Glass surface: translucent vertical gradient + subtle 1dp border + soft highlight.
- * Efek "backdrop blur" realistis hanya tersedia API 31+ (RenderEffect).
- * Untuk <31 kita pakai translucent gradient saja — secara visual tetap glassmorphism.
- */
+val LocalHazeState = compositionLocalOf<HazeState?> { null }
+
 @Composable
 fun Modifier.glass(
     shape: Shape = RoundedCornerShape(24.dp),
     intensity: Float = 1f
 ): Modifier {
     val g = LocalGlassColors.current
+    val hazeState = LocalHazeState.current
     val top = g.top.copy(alpha = (g.top.alpha * intensity).coerceIn(0f, 1f))
     val bottom = g.bottom.copy(alpha = (g.bottom.alpha * intensity).coerceIn(0f, 1f))
 
-    return this
-        .clip(shape)
+    var m = this.clip(shape)
+    if (hazeState != null) {
+        m = m.hazeEffect(state = hazeState)
+    }
+    return m
         .background(Brush.verticalGradient(listOf(top, bottom)))
         .border(
             width = 1.dp,
@@ -48,11 +50,6 @@ fun Modifier.glass(
         )
 }
 
-/** Backdrop blur opsional — otomatis no-op di API < 31. */
-@Composable
-fun Modifier.backdropBlur(radius: Dp = 24.dp): Modifier =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) blur(radius) else this
-
 @Composable
 fun GlassSurface(
     modifier: Modifier = Modifier,
@@ -62,26 +59,34 @@ fun GlassSurface(
     Box(modifier.glass(shape), content = content)
 }
 
-/** Gradient background + decorative blurred blobs (light/dark aware). */
 @Composable
 fun GlassBackground(content: @Composable BoxScope.() -> Unit) {
     val g = LocalGlassColors.current
+    val hazeState = LocalHazeState.current
+
     Box(
         Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(g.bgTop, g.bgBottom)))
     ) {
+        // Decorative blobs (tidak jadi source blur)
         Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        listOf(g.top.copy(alpha = 0.35f), androidx.compose.ui.graphics.Color.Transparent),
-                        center = Offset(200f, 300f),
-                        radius = 900f
-                    )
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    listOf(g.top.copy(alpha = 0.35f), androidx.compose.ui.graphics.Color.Transparent),
+                    center = Offset(200f, 300f),
+                    radius = 900f
                 )
+            )
         )
-        content()
+
+        // Konten yang akan diblur di bawah panel glass
+        if (hazeState != null) {
+            Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                content()
+            }
+        } else {
+            content()
+        }
     }
 }
