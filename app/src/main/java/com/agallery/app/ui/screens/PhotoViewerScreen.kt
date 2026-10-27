@@ -70,8 +70,13 @@ fun PhotoViewerScreen(
     val photos by vm.viewerPhotos(albumId).collectAsState()
     val localHazeState = remember { HazeState() }
 
-    LaunchedEffect(photos.isEmpty()) {
-        if (photos.isEmpty()) onBack()
+    var hadPhotos by remember { mutableStateOf(false) }
+    LaunchedEffect(photos.isNotEmpty()) {
+        if (photos.isNotEmpty()) {
+            hadPhotos = true
+        } else if (hadPhotos) {
+            onBack()
+        }
     }
 
     if (photos.isEmpty()) {
