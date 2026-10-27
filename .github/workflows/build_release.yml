@@ -25,15 +25,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ------------------------------------------------------------
-      # 1. Generate launcher icons dari icon.png di root repo
-      # ------------------------------------------------------------
+      # 1. Generate launcher icons dari icon.png
       - name: Generate launcher icons
         run: |
           set -e
           ICON="icon.png"
           if [ ! -f "$ICON" ]; then
-            echo "❌ icon.png tidak ditemukan di root repo. Tambahkan file icon.png (1024x1024 PNG)."
+            echo "❌ icon.png tidak ditemukan di root repo."
             exit 1
           fi
 
@@ -47,26 +45,22 @@ jobs:
           mkdir -p "$RES"/mipmap-anydpi-v26
           mkdir -p "$RES"/values
 
-          # --- Legacy launcher icons (48–192 px) ---
           convert "$ICON" -resize 48x48   "$RES/mipmap-mdpi/ic_launcher.png"
           convert "$ICON" -resize 72x72   "$RES/mipmap-hdpi/ic_launcher.png"
           convert "$ICON" -resize 96x96   "$RES/mipmap-xhdpi/ic_launcher.png"
           convert "$ICON" -resize 144x144 "$RES/mipmap-xxhdpi/ic_launcher.png"
           convert "$ICON" -resize 192x192 "$RES/mipmap-xxxhdpi/ic_launcher.png"
 
-          # --- Round icons ---
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             cp "$RES/mipmap-$d/ic_launcher.png" "$RES/mipmap-$d/ic_launcher_round.png"
           done
 
-          # --- Adaptive foreground: konten di 66% safe zone ---
           convert "$ICON" -resize 72x72   -gravity center -background none -extent 108x108 "$RES/mipmap-mdpi/ic_launcher_foreground.png"
           convert "$ICON" -resize 108x108 -gravity center -background none -extent 162x162 "$RES/mipmap-hdpi/ic_launcher_foreground.png"
           convert "$ICON" -resize 144x144 -gravity center -background none -extent 216x216 "$RES/mipmap-xhdpi/ic_launcher_foreground.png"
           convert "$ICON" -resize 216x216 -gravity center -background none -extent 324x324 "$RES/mipmap-xxhdpi/ic_launcher_foreground.png"
           convert "$ICON" -resize 288x288 -gravity center -background none -extent 432x432 "$RES/mipmap-xxxhdpi/ic_launcher_foreground.png"
 
-          # --- Adaptive icon XML ---
           cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
@@ -78,7 +72,6 @@ jobs:
           cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" \
              "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
-          # --- Warna background adaptive icon ---
           cat > "$RES/values/ic_launcher_background.xml" <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -88,9 +81,7 @@ jobs:
 
           echo "✅ Launcher icons berhasil di-generate dari $ICON"
 
-      # ------------------------------------------------------------
-      # 2. Setup signing: pakai secret kalau ada, generate kalau belum
-      # ------------------------------------------------------------
+      # 2. Signing (pakai secret kalau ada, generate kalau belum)
       - name: Prepare signing keystore
         id: signing
         env:
@@ -100,7 +91,6 @@ jobs:
           SECRET_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -e
-
           if [ -n "${SECRET_KEYSTORE_BASE64:-}" ] \
              && [ -n "${SECRET_KEYSTORE_PASSWORD:-}" ] \
              && [ -n "${SECRET_KEY_ALIAS:-}" ] \
@@ -112,7 +102,7 @@ jobs:
             echo "KEY_PASSWORD=$SECRET_KEY_PASSWORD" >> "$GITHUB_ENV"
             echo "generated=false" >> "$GITHUB_OUTPUT"
           else
-            echo "⚠️ Secret keystore belum lengkap — generate keystore baru (run pertama)."
+            echo "⚠️ Secret belum lengkap — generate keystore baru."
             STORE_PASS="AGallery_$(openssl rand -hex 12)"
             KEY_PASS="$STORE_PASS"
             ALIAS="agallery"
@@ -177,9 +167,7 @@ jobs:
             echo "Setelah secret disimpan, run berikutnya otomatis pakai keystore yang sama."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # ------------------------------------------------------------
-      # 3. Build release (langsung signed, tanpa artifact)
-      # ------------------------------------------------------------
+      # 3. JDK + Android SDK (dengan perbaikan license)
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
@@ -188,6 +176,17 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: false
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools'
+
+      - name: Accept Android SDK licenses
+        run: |
+          set -e
+          which sdkmanager
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          echo "✅ Android SDK licenses accepted."
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -201,14 +200,13 @@ jobs:
           fi
           chmod +x gradlew
 
+      # 4. Build
       - name: Build Release APK
         env:
           VERSION_CODE: ${{ github.run_number }}
         run: ./gradlew assembleRelease --stacktrace
 
-      # ------------------------------------------------------------
-      # 4. Upload langsung ke GitHub Release (tanpa actions/upload-artifact)
-      # ------------------------------------------------------------
+      # 5. Upload langsung ke GitHub Release
       - name: Upload APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
