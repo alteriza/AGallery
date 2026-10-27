@@ -51,11 +51,11 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.agallery.app.data.model.Photo
+import com.agallery.app.ui.components.glassHazeStyle
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.GlassBackground
 import com.agallery.app.ui.theme.LocalGlassColors
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 
@@ -153,9 +153,7 @@ fun PhotoGridScreen(
                     .fillMaxWidth()
                     .hazeEffect(
                         state = hazeState,
-                        style = HazeStyle(
-                            backgroundColor = LocalGlassColors.current.bgTop.copy(alpha = 0.15f)
-                        )
+                        style = glassHazeStyle()
                     )
                     .background(LocalGlassColors.current.bgTop.copy(alpha = 0.35f))
                     .padding(horizontal = 16.dp, vertical = 12.dp),
