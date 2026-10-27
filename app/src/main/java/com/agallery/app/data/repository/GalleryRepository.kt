@@ -34,4 +34,124 @@ class GalleryRepository(
         val photos = try {
             mediaStore.queryMedia()
         } catch (e: Exception) {
-            Log.e("GalleryRepository",
+            Log.e("GalleryRepository", "queryMedia failed", e)
+            emptyList()
+        }
+        syncBucketAlbums(photos)
+        photos
+    }
+
+    private suspend fun syncBucketAlbums(photos: List<Photo>) {
+        try {
+            val buckets = photos.groupBy { it.bucketId }
+            for ((bucketId, items) in buckets) {
+                try {
+                    val existing = db.albumDao().findByBucket(bucketId)
+                    if (existing == null) {
+                        val name = items.firstOrNull()?.bucket?.ifBlank { "Folder $bucketId" }
+                            ?: "Folder $bucketId"
+                        db.albumDao().insertIgnore(
+                            AlbumEntity(name = name, bucketId = bucketId)
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e("GalleryRepository", "sync bucket $bucketId failed", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("GalleryRepository", "syncBucketAlbums failed", e)
+        }
+    }
+
+    suspend fun setPinned(albumId: Long, pinned: Boolean) = withContext(Dispatchers.IO) {
+        runCatching { db.albumDao().setPinned(albumId, pinned) }
+    }
+
+    fun observeAlbumPhotos(albumId: Long): Flow<List<AlbumPhotoEntity>> =
+        db.albumDao().observePhotosInAlbum(albumId)
+
+    suspend fun createAlbum(name: String): Long = withContext(Dispatchers.IO) {
+        runCatching { db.albumDao().insert(AlbumEntity(name = name)) }.getOrDefault(-1L)
+    }
+
+    suspend fun deleteAlbum(id: Long) = withContext(Dispatchers.IO) {
+        runCatching {
+            db.albumDao().deleteRefsForAlbum(id)
+            db.albumDao().deleteAlbum(id)
+        }
+    }
+
+    suspend fun addPhotoToAlbum(albumId: Long, uri: Uri) = withContext(Dispatchers.IO) {
+        runCatching {
+            db.albumDao().addPhoto(AlbumPhotoEntity(albumId, uri.toString()))
+        }
+    }
+
+    suspend fun moveToTrash(photo: Photo) = withContext(Dispatchers.IO) {
+        runCatching {
+            val now = System.currentTimeMillis()
+            db.trashDao().insert(
+                TrashEntity(
+                    photoUri = photo.uri.toString(),
+                    displayName = photo.name,
+                    deletedAt = now,
+                    expiresAt = now + TRASH_TTL_MS
+                )
+            )
+        }
+    }
+
+    suspend fun restoreFromTrash(uri: String) = withContext(Dispatchers.IO) {
+        runCatching { db.trashDao().remove(uri) }
+    }
+
+    suspend fun removeFromTrashDb(uriString: String) = withContext(Dispatchers.IO) {
+        runCatching { db.trashDao().remove(uriString) }
+    }
+
+    suspend fun deleteFileDirect(uriString: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            context.contentResolver.delete(Uri.parse(uriString), null, null) > 0
+        }.getOrDefault(false)
+    }
+
+    suspend fun purgeExpired() = withContext(Dispatchers.IO) {
+        runCatching {
+            val expired = db.trashDao().getExpired(System.currentTimeMillis())
+            expired.forEach { item ->
+                runCatching {
+                    context.contentResolver.delete(Uri.parse(item.photoUri), null, null)
+                }
+                runCatching { db.trashDao().remove(item.photoUri) }
+            }
+        }.onFailure { Log.e("GalleryRepository", "purgeExpired failed", it) }
+    }
+
+    suspend fun saveBitmapToGallery(bitmap: Bitmap, displayName: String): Uri? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/AGallery")
+                        put(MediaStore.Images.Media.IS_PENDING, 1)
+                    }
+                }
+                val resolver = context.contentResolver
+                val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                val uri = resolver.insert(collection, values) ?: return@runCatching null
+                resolver.openOutputStream(uri)?.use { out: OutputStream ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    values.clear()
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                }
+                uri
+            }.getOrNull()
+        }
+}
