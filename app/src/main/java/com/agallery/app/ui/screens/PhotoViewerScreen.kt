@@ -40,9 +40,17 @@ fun PhotoViewerScreen(
     onEdit: (String) -> Unit
 ) {
     val photos by vm.viewerPhotos(albumId).collectAsState()
-    // Guard: photos mungkin masih kosong saat pertama compose
-    val initial = startIndex.coerceIn(0, (photos.size - 1).coerceAtLeast(0))
-    val pagerState = rememberPagerState(initialPage = initial) { photos.size }
+
+// Pager hanya dibuat SETELAH photos ter-load, sehingga initialPage akurat
+    if (photos.isEmpty()) {
+        Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color.White)
+        }
+        return
+    }
+
+    val safeStart = startIndex.coerceIn(0, photos.size - 1)
+    val pagerState = rememberPagerState(initialPage = safeStart) { photos.size }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (photos.isNotEmpty()) {
