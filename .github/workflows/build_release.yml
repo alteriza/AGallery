@@ -29,44 +29,66 @@ jobs:
       # 1. Generate launcher icons dari icon.png di root repo
       # ------------------------------------------------------------
       - name: Generate launcher icons
+        timeout-minutes: 5
         run: |
           set -e
           ICON="icon.png"
           if [ ! -f "$ICON" ]; then
-            echo "❌ icon.png tidak ditemukan di root repo. Tambahkan file icon.png (1024x1024 PNG)."
+            echo "❌ icon.png tidak ditemukan di root repo."
             exit 1
           fi
 
-          if ! command -v convert >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq imagemagick
+          # --- Info file dulu, biar kelihatan kalau icon.png-nya raksasa ---
+          ls -lh "$ICON"
+          file "$ICON" || true
+
+          # --- Cari tool ImageMagick yang tersedia (IM7 = magick, IM6 = convert) ---
+          IM=""
+          if command -v magick >/dev/null 2>&1; then
+            IM="magick"
+            echo "✅ Pakai pre-installed ImageMagick 7 (magick)"
+          elif command -v convert >/dev/null 2>&1; then
+            IM="convert"
+            echo "✅ Pakai pre-installed ImageMagick 6 (convert)"
+          else
+            echo "🔧 ImageMagick tidak ditemukan, install dengan verbose output..."
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+            if command -v magick >/dev/null 2>&1; then
+              IM="magick"
+            else
+              IM="convert"
+            fi
+            echo "✅ Terinstall: $IM"
           fi
+
+          # --- Verifikasi file terbaca ImageMagick ---
+          "$IM" identify "$ICON"
 
           RES="app/src/main/res"
           mkdir -p "$RES"/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}
           mkdir -p "$RES"/mipmap-anydpi-v26
           mkdir -p "$RES"/values
 
-          # --- Legacy launcher icons (48–192 px) ---
-          convert "$ICON" -resize 48x48   "$RES/mipmap-mdpi/ic_launcher.png"
-          convert "$ICON" -resize 72x72   "$RES/mipmap-hdpi/ic_launcher.png"
-          convert "$ICON" -resize 96x96   "$RES/mipmap-xhdpi/ic_launcher.png"
-          convert "$ICON" -resize 144x144 "$RES/mipmap-xxhdpi/ic_launcher.png"
-          convert "$ICON" -resize 192x192 "$RES/mipmap-xxxhdpi/ic_launcher.png"
+          # --- Legacy launcher icons ---
+          "$IM" "$ICON" -resize 48x48   "$RES/mipmap-mdpi/ic_launcher.png"
+          "$IM" "$ICON" -resize 72x72   "$RES/mipmap-hdpi/ic_launcher.png"
+          "$IM" "$ICON" -resize 96x96   "$RES/mipmap-xhdpi/ic_launcher.png"
+          "$IM" "$ICON" -resize 144x144 "$RES/mipmap-xxhdpi/ic_launcher.png"
+          "$IM" "$ICON" -resize 192x192 "$RES/mipmap-xxxhdpi/ic_launcher.png"
 
           # --- Round icons ---
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             cp "$RES/mipmap-$d/ic_launcher.png" "$RES/mipmap-$d/ic_launcher_round.png"
           done
 
-          # --- Adaptive foreground: konten di 66% safe zone ---
-          convert "$ICON" -resize 72x72   -gravity center -background none -extent 108x108 "$RES/mipmap-mdpi/ic_launcher_foreground.png"
-          convert "$ICON" -resize 108x108 -gravity center -background none -extent 162x162 "$RES/mipmap-hdpi/ic_launcher_foreground.png"
-          convert "$ICON" -resize 144x144 -gravity center -background none -extent 216x216 "$RES/mipmap-xhdpi/ic_launcher_foreground.png"
-          convert "$ICON" -resize 216x216 -gravity center -background none -extent 324x324 "$RES/mipmap-xxhdpi/ic_launcher_foreground.png"
-          convert "$ICON" -resize 288x288 -gravity center -background none -extent 432x432 "$RES/mipmap-xxxhdpi/ic_launcher_foreground.png"
+          # --- Adaptive foreground (safe zone) ---
+          "$IM" "$ICON" -resize 72x72   -gravity center -background none -extent 108x108 "$RES/mipmap-mdpi/ic_launcher_foreground.png"
+          "$IM" "$ICON" -resize 108x108 -gravity center -background none -extent 162x162 "$RES/mipmap-hdpi/ic_launcher_foreground.png"
+          "$IM" "$ICON" -resize 144x144 -gravity center -background none -extent 216x216 "$RES/mipmap-xhdpi/ic_launcher_foreground.png"
+          "$IM" "$ICON" -resize 216x216 -gravity center -background none -extent 324x324 "$RES/mipmap-xxhdpi/ic_launcher_foreground.png"
+          "$IM" "$ICON" -resize 288x288 -gravity center -background none -extent 432x432 "$RES/mipmap-xxxhdpi/ic_launcher_foreground.png"
 
-          # --- Adaptive icon XML ---
           cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
@@ -74,11 +96,9 @@ jobs:
               <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
           </adaptive-icon>
           XML
-
           cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" \
              "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
-          # --- Warna background adaptive icon ---
           cat > "$RES/values/ic_launcher_background.xml" <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
