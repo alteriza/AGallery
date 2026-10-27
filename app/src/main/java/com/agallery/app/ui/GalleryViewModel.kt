@@ -2,6 +2,7 @@ package com.agallery.app.ui
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.agallery.app.data.local.AlbumPhotoEntity
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -38,34 +40,58 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
-    val trash: StateFlow<List<TrashEntity>> = repo.trash
+    private val safeTrash = repo.trash.catch { e ->
+        Log.e("GalleryViewModel", "trash flow failed", e)
+        emit(emptyList())
+    }
+    private val safeAlbumsFlow = repo.albumsFlow.catch { e ->
+        Log.e("GalleryViewModel", "albumsFlow failed", e)
+        emit(emptyList<AlbumWithCount>())
+    }
+    private val safeAlbumRefs = repo.albumRefs.catch { e ->
+        Log.e("GalleryViewModel", "albumRefs flow failed", e)
+        emit(emptyList<AlbumPhotoEntity>())
+    }
+
+    val trash: StateFlow<List<TrashEntity>> = safeTrash
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val photos: StateFlow<List<Photo>> =
-        combine(_raw, repo.trash) { all, trashItems ->
+        combine(_raw, safeTrash) { all, trashItems ->
             val trashUris = trashItems.map { it.photoUri }.toSet()
             all.filter { it.uri.toString() !in trashUris }
+        }.catch { e ->
+            Log.e("GalleryViewModel", "photos flow failed", e)
+            emit(emptyList())
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val albums: StateFlow<List<AlbumUi>> =
-        combine(repo.albumsFlow, photos, repo.albumRefs) { rows, photoList, refs ->
-            val byUri = photoList.associateBy { it.uri.toString() }
-            val refsByAlbum = refs.groupBy({ it.albumId }, { it.photoUri })
-            rows.mapNotNull { row ->
-                val e = row.album
-                val items: List<Photo> =
-                    if (e.bucketId != null) photoList.filter { it.bucketId == e.bucketId }
-                    else refsByAlbum[e.id].orEmpty().mapNotNull { byUri[it] }
-                if (items.isEmpty() && !e.isPinned) return@mapNotNull null
-                AlbumUi(
-                    id = e.id,
-                    name = e.name,
-                    bucketId = e.bucketId,
-                    photoCount = items.size,
-                    isPinned = e.isPinned,
-                    thumbnails = items.take(4).map { it.uri }
-                )
+        combine(safeAlbumsFlow, photos, safeAlbumRefs) { rows, photoList, refs ->
+            runCatching {
+                val byUri = photoList.associateBy { it.uri.toString() }
+                val refsByAlbum = refs.groupBy({ it.albumId }, { it.photoUri })
+                rows.mapNotNull { row ->
+                    val e = row.album
+                    val items: List<Photo> =
+                        if (e.bucketId != null) photoList.filter { it.bucketId == e.bucketId }
+                        else refsByAlbum[e.id].orEmpty().mapNotNull { byUri[it] }
+                    if (items.isEmpty() && !e.isPinned) return@mapNotNull null
+                    AlbumUi(
+                        id = e.id,
+                        name = e.name,
+                        bucketId = e.bucketId,
+                        photoCount = items.size,
+                        isPinned = e.isPinned,
+                        thumbnails = items.take(4).map { it.uri }
+                    )
+                }
+            }.getOrElse { e ->
+                Log.e("GalleryViewModel", "build albums failed", e)
+                emptyList()
             }
+        }.catch { e ->
+            Log.e("GalleryViewModel", "albums flow failed", e)
+            emit(emptyList())
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val viewerCache = ConcurrentHashMap<Long, StateFlow<List<Photo>>>()
@@ -73,18 +99,21 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun viewerPhotos(albumId: Long?): StateFlow<List<Photo>> {
         if (albumId == null) return photos
         return viewerCache.getOrPut(albumId) {
-            combine(photos, albums, repo.albumRefs) { photoList, albumList, refs ->
-                val album = albumList.find { it.id == albumId } ?: return@combine emptyList()
-                if (album.bucketId != null) {
-                    photoList.filter { it.bucketId == album.bucketId }
-                } else {
-                    val uriSet = refs
-                        .filter { it.albumId == albumId }
-                        .map { it.photoUri }
-                        .toSet()
-                    photoList.filter { it.uri.toString() in uriSet }
-                }
-            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            combine(photos, albums, safeAlbumRefs) { photoList, albumList, refs ->
+                runCatching {
+                    val album = albumList.find { it.id == albumId } ?: return@runCatching emptyList()
+                    if (album.bucketId != null) {
+                        photoList.filter { it.bucketId == album.bucketId }
+                    } else {
+                        val uriSet = refs
+                            .filter { it.albumId == albumId }
+                            .map { it.photoUri }
+                            .toSet()
+                        photoList.filter { it.uri.toString() in uriSet }
+                    }
+                }.getOrElse { emptyList() }
+            }.catch { emit(emptyList()) }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
         }
     }
 
@@ -94,59 +123,105 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh() {
         viewModelScope.launch {
-            _isLoading.value = true
-            _raw.value = withContext(Dispatchers.IO) { repo.loadMedia() }
-            _isLoading.value = false
+            try {
+                _isLoading.value = true
+                _raw.value = withContext(Dispatchers.IO) { repo.loadMedia() }
+            } catch (e: Exception) {
+                Log.e("GalleryViewModel", "refresh failed", e)
+                _raw.value = emptyList()
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
     fun createAlbum(name: String) = viewModelScope.launch {
         if (name.isBlank()) return@launch
-        repo.createAlbum(name.trim())
-        _message.value = "Album dibuat"
+        try {
+            repo.createAlbum(name.trim())
+            _message.value = "Album dibuat"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "createAlbum failed", e)
+        }
     }
 
     fun deleteAlbum(id: Long) = viewModelScope.launch {
-        repo.deleteAlbum(id)
-        viewerCache.remove(id)
-        _message.value = "Album dihapus"
+        try {
+            repo.deleteAlbum(id)
+            viewerCache.remove(id)
+            _message.value = "Album dihapus"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "deleteAlbum failed", e)
+        }
     }
 
     fun togglePin(albumId: Long, pinned: Boolean) = viewModelScope.launch {
-        repo.setPinned(albumId, pinned)
+        try {
+            repo.setPinned(albumId, pinned)
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "togglePin failed", e)
+        }
     }
 
     fun addPhotoToAlbum(albumId: Long, uri: Uri) = viewModelScope.launch {
-        repo.addPhotoToAlbum(albumId, uri)
-        _message.value = "Ditambahkan ke album"
+        try {
+            repo.addPhotoToAlbum(albumId, uri)
+            _message.value = "Ditambahkan ke album"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "addPhotoToAlbum failed", e)
+        }
     }
 
     fun moveToTrash(photo: Photo) = viewModelScope.launch {
-        repo.moveToTrash(photo)
-        _message.value = "Dipindahkan ke Trash"
+        try {
+            repo.moveToTrash(photo)
+            _message.value = "Dipindahkan ke Trash"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "moveToTrash failed", e)
+        }
     }
 
     fun restoreFromTrash(uri: String) = viewModelScope.launch {
-        repo.restoreFromTrash(uri)
-        _message.value = "Dipulihkan"
+        try {
+            repo.restoreFromTrash(uri)
+            _message.value = "Dipulihkan"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "restoreFromTrash failed", e)
+        }
     }
 
     fun finalizeTrashDeletion(uri: String) = viewModelScope.launch {
-        repo.removeFromTrashDb(uri)
-        _message.value = "Dihapus permanen"
+        try {
+            repo.removeFromTrashDb(uri)
+            _message.value = "Dihapus permanen"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "finalizeTrashDeletion failed", e)
+        }
     }
 
     fun deleteFileDirect(uri: String) = viewModelScope.launch {
-        val ok = repo.deleteFileDirect(uri)
-        repo.removeFromTrashDb(uri)
-        _message.value = if (ok) "Dihapus permanen" else "Hanya dihapus dari Trash"
+        try {
+            val ok = repo.deleteFileDirect(uri)
+            repo.removeFromTrashDb(uri)
+            _message.value = if (ok) "Dihapus permanen" else "Hanya dihapus dari Trash"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "deleteFileDirect failed", e)
+        }
     }
 
     fun saveEditedBitmap(bitmap: android.graphics.Bitmap, onSaved: (Uri?) -> Unit) =
         viewModelScope.launch {
-            val uri = repo.saveBitmapToGallery(bitmap, "AGallery_${System.currentTimeMillis()}.jpg")
-            refresh()
-            onSaved(uri)
+            try {
+                val uri = repo.saveBitmapToGallery(
+                    bitmap,
+                    "AGallery_${System.currentTimeMillis()}.jpg"
+                )
+                refresh()
+                onSaved(uri)
+            } catch (e: Exception) {
+                Log.e("GalleryViewModel", "saveEditedBitmap failed", e)
+                onSaved(null)
+            }
         }
 
     fun clearMessage() { _message.value = null }
