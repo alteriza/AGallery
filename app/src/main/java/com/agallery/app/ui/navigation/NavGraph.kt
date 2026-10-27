@@ -1,6 +1,7 @@
 package com.agallery.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -16,11 +17,14 @@ import com.agallery.app.ui.screens.*
 fun AGalleryNavHost(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
 
+    // ViewModel di-scope ke Activity (bukan per NavBackStackEntry).
+    // Semua screen memakai instance yang sama → data tidak reload saat navigasi.
+    val vm: GalleryViewModel = viewModel()
+
     PermissionGate {
         NavHost(navController = navController, startDestination = "grid", modifier = modifier) {
 
             composable("grid") {
-                val vm: GalleryViewModel = viewModel()
                 PhotoGridScreen(
                     vm = vm,
                     onPhotoClick = { index -> navController.navigate("viewer/$index") },
@@ -39,17 +43,17 @@ fun AGalleryNavHost(modifier: Modifier = Modifier) {
                 val index = entry.arguments?.getInt("index") ?: 0
                 val albumId = entry.arguments?.getLong("albumId")?.takeIf { it >= 0 }
                 PhotoViewerScreen(
+                    vm = vm,
                     startIndex = index,
                     albumId = albumId,
                     onBack = { navController.popBackStack() },
-                    onEdit = { uri ->
-                        navController.navigate("editor?uri=${android.net.Uri.encode(uri)}")
-                    }
+                    onEdit = { uri -> navController.navigate("editor?uri=${android.net.Uri.encode(uri)}") }
                 )
             }
 
             composable("albums") {
                 AlbumsScreen(
+                    vm = vm,
                     onBack = { navController.popBackStack() },
                     onOpenAlbum = { id, name ->
                         navController.navigate("album/$id?name=${android.net.Uri.encode(name)}")
@@ -67,17 +71,16 @@ fun AGalleryNavHost(modifier: Modifier = Modifier) {
                 val id = entry.arguments?.getLong("id") ?: 0L
                 val name = entry.arguments?.getString("name") ?: "Album"
                 AlbumDetailScreen(
+                    vm = vm,
                     albumId = id,
                     albumName = name,
                     onBack = { navController.popBackStack() },
-                    onOpenViewer = { index ->
-                        navController.navigate("viewer/$index?albumId=$id")
-                    }
+                    onOpenViewer = { index -> navController.navigate("viewer/$index?albumId=$id") }
                 )
             }
 
             composable("trash") {
-                TrashScreen(onBack = { navController.popBackStack() })
+                TrashScreen(vm = vm, onBack = { navController.popBackStack() })
             }
 
             composable(
@@ -86,6 +89,7 @@ fun AGalleryNavHost(modifier: Modifier = Modifier) {
             ) { entry ->
                 val uri = entry.arguments?.getString("uri").orEmpty()
                 PhotoEditorScreen(
+                    vm = vm,
                     uriString = uri,
                     onBack = { navController.popBackStack() }
                 )
