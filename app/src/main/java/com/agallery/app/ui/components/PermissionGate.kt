@@ -19,9 +19,13 @@ fun PermissionGate(content: @Composable () -> Unit) {
     val perms = when {
         Build.VERSION.SDK_INT >= 34 -> listOf(
             Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
             Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
         )
-        Build.VERSION.SDK_INT >= 33 -> listOf(Manifest.permission.READ_MEDIA_IMAGES)
+        Build.VERSION.SDK_INT >= 33 -> listOf(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO
+        )
         else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 
