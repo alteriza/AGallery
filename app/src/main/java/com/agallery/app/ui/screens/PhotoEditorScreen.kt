@@ -19,7 +19,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.ColorMatrixColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -110,7 +109,7 @@ fun PhotoEditorScreen(
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     colorFilter = ColorFilter.colorMatrix(
-                        ColorMatrix().apply { setScale(brightness, brightness, brightness, 1f) }
+                        ColorMatrix().apply { setToScale(brightness, brightness, brightness, 1f) }
                     ),
                     modifier = Modifier
                         .fillMaxSize()
