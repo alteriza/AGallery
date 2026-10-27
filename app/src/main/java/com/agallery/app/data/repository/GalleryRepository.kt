@@ -21,16 +21,38 @@ class GalleryRepository(
     private val mediaStore = MediaStoreDataSource(context)
     private val TRASH_TTL_MS = 7L * 24 * 60 * 60 * 1000
 
-    val albums: Flow<List<AlbumWithCount>> = db.albumDao().observeAlbums()
+    val albumsFlow: Flow<List<AlbumWithCount>> = db.albumDao().observeAlbums()
     val trash: Flow<List<TrashEntity>> = db.trashDao().observeTrash()
+    val albumRefs: Flow<List<AlbumPhotoEntity>> = db.albumDao().observeAllRefs()
 
-    fun loadPhotos(): List<Photo> = mediaStore.queryPhotos()
+    /** Load semua media (image + video) dan sinkronkan bucket albums ke Room. */
+    suspend fun loadMedia(): List<Photo> = withContext(Dispatchers.IO) {
+        val photos = mediaStore.queryMedia()
+        syncBucketAlbums(photos)
+        photos
+    }
+
+    private suspend fun syncBucketAlbums(photos: List<Photo>) {
+        val buckets = photos.groupBy { it.bucketId }
+        for ((bucketId, items) in buckets) {
+            val existing = db.albumDao().findByBucket(bucketId)
+            if (existing == null) {
+                val name = items.first().bucket.ifBlank { "Folder $bucketId" }
+                db.albumDao().insertIgnore(AlbumEntity(name = name, bucketId = bucketId))
+            }
+        }
+    }
+
+    suspend fun setPinned(albumId: Long, pinned: Boolean) = withContext(Dispatchers.IO) {
+        db.albumDao().setPinned(albumId, pinned)
+    }
 
     fun observeAlbumPhotos(albumId: Long): Flow<List<AlbumPhotoEntity>> =
         db.albumDao().observePhotosInAlbum(albumId)
 
-    suspend fun createAlbum(name: String): Long =
-        withContext(Dispatchers.IO) { db.albumDao().insert(AlbumEntity(name = name)) }
+    suspend fun createAlbum(name: String): Long = withContext(Dispatchers.IO) {
+        db.albumDao().insert(AlbumEntity(name = name))
+    }
 
     suspend fun deleteAlbum(id: Long) = withContext(Dispatchers.IO) {
         db.albumDao().deleteRefsForAlbum(id)
@@ -42,7 +64,6 @@ class GalleryRepository(
         Unit
     }
 
-    /** Soft delete: catat ke trash, foto asli tetap ada di MediaStore. */
     suspend fun moveToTrash(photo: Photo) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         db.trashDao().insert(
@@ -59,10 +80,14 @@ class GalleryRepository(
         db.trashDao().remove(uri)
     }
 
-    /** Hapus permanen dari device + dari tabel trash. */
-    suspend fun deletePermanently(uri: String) = withContext(Dispatchers.IO) {
-        runCatching { context.contentResolver.delete(Uri.parse(uri), null, null) }
-        db.trashDao().remove(uri)
+    /** Hapus permanen. Return true kalau sukses (app-owned), false kalau perlu izin user. */
+    suspend fun deletePermanently(uriString: String): Boolean = withContext(Dispatchers.IO) {
+        val uri = Uri.parse(uriString)
+        val deleted = runCatching {
+            context.contentResolver.delete(uri, null, null) > 0
+        }.getOrDefault(false)
+        if (deleted) db.trashDao().remove(uriString)
+        deleted
     }
 
     suspend fun purgeExpired() = withContext(Dispatchers.IO) {
@@ -73,7 +98,6 @@ class GalleryRepository(
         }
     }
 
-    /** Simpan bitmap hasil edit ke Pictures/AGallery via MediaStore (tanpa izin tulis di Q+). */
     suspend fun saveBitmapToGallery(bitmap: Bitmap, displayName: String): Uri? =
         withContext(Dispatchers.IO) {
             val values = ContentValues().apply {
@@ -88,7 +112,6 @@ class GalleryRepository(
             val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
             else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-
             val uri = resolver.insert(collection, values) ?: return@withContext null
             resolver.openOutputStream(uri)?.use { out: OutputStream ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
