@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -53,7 +54,11 @@ import coil.request.ImageRequest
 import com.agallery.app.data.model.Photo
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.GlassBackground
-import com.agallery.app.ui.components.glass
+import com.agallery.app.ui.theme.LocalGlassColors
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import androidx.compose.foundation.layout.height
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -70,6 +75,7 @@ fun PhotoGridScreen(
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
     val gridState = rememberLazyGridState()
+    val hazeState = remember { HazeState() }
 
     var menuPhoto by remember { mutableStateOf<Photo?>(null) }
     var showAlbumPicker by remember { mutableStateOf(false) }
@@ -82,40 +88,22 @@ fun PhotoGridScreen(
     }
 
     GlassBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            snackbarHost = { SnackbarHost(snackbarHost) },
-            topBar = {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .glass(RoundedCornerShape(22.dp))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "AGallery",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onNavigateAlbums) {
-                        Icon(Icons.Filled.PhotoAlbum, "Albums")
-                    }
-                    IconButton(onClick = onNavigateTrash) {
-                        Icon(Icons.Filled.DeleteOutline, "Trash")
-                    }
-                }
-            }
-        ) { padding ->
-            Box(Modifier.padding(padding).fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 if (loading && photos.isEmpty()) {
-                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
                 } else {
                     LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Adaptive(110.dp),
-                        contentPadding = PaddingValues(12.dp),
+                        contentPadding = PaddingValues(
+                            top = 84.dp,
+                            start = 12.dp,
+                            end = 12.dp,
+                            bottom = 12.dp
+                        ),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
@@ -152,11 +140,7 @@ fun PhotoGridScreen(
                                             .background(Color.Black.copy(alpha = 0.45f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            Icons.Filled.PlayArrow,
-                                            "Video",
-                                            tint = Color.White
-                                        )
+                                        Icon(Icons.Filled.PlayArrow, "Video", tint = Color.White)
                                     }
                                 }
                             }
@@ -164,16 +148,40 @@ fun PhotoGridScreen(
                     }
                 }
             }
+
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(hazeState)
+                    .background(LocalGlassColors.current.bgTop.copy(alpha = 0.35f))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "AGallery",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onNavigateAlbums) {
+                    Icon(Icons.Filled.PhotoAlbum, "Albums")
+                }
+                IconButton(onClick = onNavigateTrash) {
+                    Icon(Icons.Filled.DeleteOutline, "Trash")
+                }
+            }
+
+            SnackbarHost(
+                hostState = snackbarHost,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
+            )
         }
 
         menuPhoto?.let { photo ->
             AlertDialog(
                 onDismissRequest = { menuPhoto = null },
-                title = {
-                    Text(photo.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
+                title = { Text(photo.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 text = {
-                    androidx.compose.foundation.layout.Column {
+                    Column {
                         TextButton(onClick = { showAlbumPicker = true }) {
                             Text("Tambahkan ke Album")
                         }
@@ -194,7 +202,7 @@ fun PhotoGridScreen(
                 onDismissRequest = { showAlbumPicker = false },
                 title = { Text("Pilih Album") },
                 text = {
-                    androidx.compose.foundation.layout.Column {
+                    Column {
                         if (albums.isEmpty()) Text("Belum ada album.")
                         albums.forEach { a ->
                             TextButton(onClick = {
