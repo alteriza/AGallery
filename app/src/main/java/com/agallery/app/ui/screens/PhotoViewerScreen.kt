@@ -53,7 +53,6 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.agallery.app.data.model.Photo
 import com.agallery.app.ui.GalleryViewModel
-import com.agallery.app.ui.components.LocalGlassColors
 import com.agallery.app.ui.components.LocalHazeState
 import com.agallery.app.ui.theme.LocalGlassColors
 import dev.chrisbanes.haze.HazeState
