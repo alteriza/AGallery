@@ -59,6 +59,7 @@ android {
 }
 
 dependencies {
+    implementation("dev.chrisbanes.haze:haze:1.5.0")
     implementation("io.coil-kt:coil-video:2.7.0")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
