@@ -23,6 +23,14 @@ import dev.chrisbanes.haze.hazeEffect
 val LocalHazeState = compositionLocalOf<HazeState?> { null }
 
 @Composable
+fun glassHazeStyle(alpha: Float = 0.15f): HazeStyle {
+    val g = LocalGlassColors.current
+    return HazeStyle.Default.copy(
+        backgroundColor = g.bgTop.copy(alpha = alpha)
+    )
+}
+
+@Composable
 fun Modifier.glass(
     shape: Shape = RoundedCornerShape(24.dp),
     intensity: Float = 1f
@@ -34,12 +42,7 @@ fun Modifier.glass(
 
     var m = this.clip(shape)
     if (hazeState != null) {
-        m = m.hazeEffect(
-            state = hazeState,
-            style = HazeStyle(
-                backgroundColor = g.bgTop.copy(alpha = 0.15f)
-            )
-        )
+        m = m.hazeEffect(state = hazeState, style = glassHazeStyle())
     }
     return m
         .background(Brush.verticalGradient(listOf(top, bottom)))
