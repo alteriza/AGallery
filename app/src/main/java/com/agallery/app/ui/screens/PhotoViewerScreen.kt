@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -26,8 +26,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,13 +48,16 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.agallery.app.data.model.Photo
 import com.agallery.app.ui.GalleryViewModel
+import com.agallery.app.ui.components.LocalGlassColors
 import com.agallery.app.ui.components.LocalHazeState
-import com.agallery.app.ui.components.glass
+import com.agallery.app.ui.theme.LocalGlassColors
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 
 @Composable
@@ -66,28 +71,34 @@ fun PhotoViewerScreen(
     val photos by vm.viewerPhotos(albumId).collectAsState()
     val localHazeState = remember { HazeState() }
 
-    CompositionLocalProvider(LocalHazeState provides localHazeState) {
-        if (photos.isEmpty()) {
-            Box(
-                Modifier.fillMaxSize().background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Color.White)
-            }
-        } else {
-            val safeStart = startIndex.coerceIn(0, photos.size - 1)
-            ViewerContent(
-                photos = photos,
-                startIndex = safeStart,
-                hazeState = localHazeState,
-                onBack = onBack,
-                onEdit = onEdit,
-                onDelete = { photo ->
-                    vm.moveToTrash(photo)
-                    onBack()
-                }
-            )
+    LaunchedEffect(photos.isEmpty()) {
+        if (photos.isEmpty()) onBack()
+    }
+
+    if (photos.isEmpty()) {
+        Box(
+            Modifier.fillMaxSize().background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = Color.White)
         }
+        return
+    }
+
+    val safeStart = startIndex.coerceIn(0, photos.size - 1)
+
+    CompositionLocalProvider(LocalHazeState provides localHazeState) {
+        ViewerContent(
+            photos = photos,
+            startIndex = safeStart,
+            hazeState = localHazeState,
+            onBack = onBack,
+            onEdit = onEdit,
+            onDelete = { photo ->
+                vm.moveToTrash(photo)
+                onBack()
+            }
+        )
     }
 }
 
@@ -102,33 +113,37 @@ private fun ViewerContent(
 ) {
     val pagerState = rememberPagerState(initialPage = startIndex) { photos.size }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .hazeSource(hazeState)
-    ) {
-        HorizontalPager(
-            state = pagerState,
-            key = { page -> photos.getOrNull(page)?.uri?.toString() ?: "page_$page" },
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val photo = photos.getOrNull(page)
-            if (photo != null) {
-                if (photo.isVideo) {
-                    VideoPlayer(photo = photo, isActive = page == pagerState.currentPage)
-                } else {
-                    ZoomableImage(photo)
+    LaunchedEffect(photos.size) {
+        if (photos.isNotEmpty() && pagerState.currentPage >= photos.size) {
+            pagerState.scrollToPage(photos.size - 1)
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+            HorizontalPager(
+                state = pagerState,
+                key = { page -> photos.getOrNull(page)?.uri?.toString() ?: "p_$page" },
+                beyondViewportPageCount = 0,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val photo = photos.getOrNull(page)
+                if (photo != null) {
+                    if (photo.isVideo) {
+                        VideoPlayer(photo = photo, isActive = page == pagerState.currentPage)
+                    } else {
+                        ZoomableImage(photo)
+                    }
                 }
             }
         }
 
         Row(
             Modifier
-                .align(Alignment.TopCenter)
-                .padding(16.dp)
-                .glass(RoundedCornerShape(20.dp))
-                .padding(horizontal = 8.dp),
+                .fillMaxWidth()
+                .hazeEffect(hazeState)
+                .background(LocalGlassColors.current.bgTop.copy(alpha = 0.35f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
@@ -198,42 +213,7 @@ private fun ZoomableImage(photo: Photo) {
 
 @Composable
 private fun VideoPlayer(photo: Photo, isActive: Boolean) {
-    val context = LocalContext.current
-
-    val exo = remember(photo.uri, isActive) {
-        if (!isActive) null
-        else runCatching {
-            ExoPlayer.Builder(context).build().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(C.USAGE_MEDIA)
-                        .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                        .build(),
-                    true
-                )
-                setMediaItem(MediaItem.fromUri(photo.uri))
-                prepare()
-                playWhenReady = true
-            }
-        }.getOrNull()
-    }
-
-    DisposableEffect(exo) {
-        onDispose { runCatching { exo?.release() } }
-    }
-
-    if (exo != null) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = true
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                }
-            },
-            update = { view -> view.player = exo }
-        )
-    } else {
+    if (!isActive) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
                 Icons.Filled.PlayArrow,
@@ -242,5 +222,44 @@ private fun VideoPlayer(photo: Photo, isActive: Boolean) {
                 modifier = Modifier.size(72.dp)
             )
         }
+        return
     }
+    key(photo.uri.toString()) {
+        ActiveVideo(photo)
+    }
+}
+
+@Composable
+private fun ActiveVideo(photo: Photo) {
+    val context = LocalContext.current
+    val exo = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true
+            )
+            setMediaItem(MediaItem.fromUri(photo.uri))
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { runCatching { exo.release() } }
+    }
+
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                useController = true
+                setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            }
+        },
+        update = { view -> view.player = exo }
+    )
 }
