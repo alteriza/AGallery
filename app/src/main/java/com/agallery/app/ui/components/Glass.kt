@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import com.agallery.app.ui.theme.LocalGlassColors
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 
 val LocalHazeState = compositionLocalOf<HazeState?> { null }
@@ -33,7 +34,12 @@ fun Modifier.glass(
 
     var m = this.clip(shape)
     if (hazeState != null) {
-        m = m.hazeEffect(state = hazeState)
+        m = m.hazeEffect(
+            state = hazeState,
+            style = HazeStyle(
+                backgroundColor = g.bgTop.copy(alpha = 0.15f)
+            )
+        )
     }
     return m
         .background(Brush.verticalGradient(listOf(top, bottom)))
