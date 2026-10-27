@@ -76,6 +76,20 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+/** Dipanggil setelah user konfirmasi dialog sistem (Android 11+). */
+    fun finalizeTrashDeletion(uri: String) = viewModelScope.launch {
+        repo.removeFromTrashDb(uri)
+        _message.value = "File dihapus permanen"
+    }
+
+/** Android 10 ke bawah: hapus langsung lewat ContentResolver. */
+    fun deleteFileDirect(uri: String) = viewModelScope.launch {
+        val ok = repo.deleteFileDirect(uri)
+        repo.removeFromTrashDb(uri)
+        _message.value = if (ok) "File dihapus permanen"
+        else "Terhapus dari Trash (file tidak dapat dihapus)"
+    }
+    
     /** Foto dalam konteks viewer: semua, atau filter per album (bucket / manual). */
     fun viewerPhotos(albumId: Long?): StateFlow<List<Photo>> {
         if (albumId == null) return photos
