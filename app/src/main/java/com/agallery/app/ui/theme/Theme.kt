@@ -1,5 +1,7 @@
 package com.agallery.app.ui.theme
-
+import androidx.compose.runtime.remember
+import dev.chrisbanes.haze.HazeState
+import com.agallery.app.ui.components.LocalHazeState
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -71,7 +73,12 @@ fun AGalleryTheme(
         content = Color(0xFF141428), subtle = Color(0x99141428)
     )
 
-    CompositionLocalProvider(LocalGlassColors provides glass) {
+    val hazeState = remember { HazeState() }
+
+    CompositionLocalProvider(
+        LocalGlassColors provides glass,
+        LocalHazeState provides hazeState,
+    ) {
         MaterialTheme(
             colorScheme = scheme,
             typography = Typography,
