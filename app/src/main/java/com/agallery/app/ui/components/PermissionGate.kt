@@ -30,17 +30,14 @@ fun PermissionGate(
     onPermissionsGranted: () -> Unit = {},
     content: @Composable () -> Unit
 ) {
-    val perms = when {
-        Build.VERSION.SDK_INT >= 34 -> listOf(
-            Manifest.permission.READ_MEDIA_IMAGES,
-            Manifest.permission.READ_MEDIA_VIDEO,
-            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
-        )
-        Build.VERSION.SDK_INT >= 33 -> listOf(
-            Manifest.permission.READ_MEDIA_IMAGES,
-            Manifest.permission.READ_MEDIA_VIDEO
-        )
-        else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    val perms = remember {
+        when {
+            Build.VERSION.SDK_INT >= 33 -> listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO
+            )
+            else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
     }
 
     val state = rememberMultiplePermissionsState(perms)
@@ -63,7 +60,7 @@ fun PermissionGate(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(24.dp)
             ) {
-                Text("Izin akses galeri & video diperlukan untuk menampilkan media.")
+                Text("Izin akses galeri & video diperlukan.")
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = { state.launchMultiplePermissionRequest() }) {
                     Text("Beri Izin")
