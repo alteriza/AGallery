@@ -1,7 +1,6 @@
 package com.agallery.app.ui.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -11,17 +10,19 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.PermissionGate
-import com.agallery.app.ui.screens.*
+import com.agallery.app.ui.screens.AlbumDetailScreen
+import com.agallery.app.ui.screens.AlbumsScreen
+import com.agallery.app.ui.screens.PhotoEditorScreen
+import com.agallery.app.ui.screens.PhotoGridScreen
+import com.agallery.app.ui.screens.PhotoViewerScreen
+import com.agallery.app.ui.screens.TrashScreen
 
 @Composable
 fun AGalleryNavHost(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
-
-    // ViewModel di-scope ke Activity (bukan per NavBackStackEntry).
-    // Semua screen memakai instance yang sama → data tidak reload saat navigasi.
     val vm: GalleryViewModel = viewModel()
 
-    PermissionGate {
+    PermissionGate(onPermissionsGranted = { vm.refresh() }) {
         NavHost(navController = navController, startDestination = "grid", modifier = modifier) {
 
             composable("grid") {
@@ -75,7 +76,9 @@ fun AGalleryNavHost(modifier: Modifier = Modifier) {
                     albumId = id,
                     albumName = name,
                     onBack = { navController.popBackStack() },
-                    onOpenViewer = { index -> navController.navigate("viewer/$index?albumId=$id") }
+                    onOpenViewer = { index ->
+                        navController.navigate("viewer/$index?albumId=$id")
+                    }
                 )
             }
 
