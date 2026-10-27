@@ -30,12 +30,17 @@ fun AGalleryNavHost(modifier: Modifier = Modifier) {
             }
 
             composable(
-                "viewer/{index}",
-                arguments = listOf(navArgument("index") { type = NavType.IntType })
+                "viewer/{index}?albumId={albumId}",
+                arguments = listOf(
+                    navArgument("index") { type = NavType.IntType },
+                    navArgument("albumId") { type = NavType.LongType; defaultValue = -1L }
+                )
             ) { entry ->
                 val index = entry.arguments?.getInt("index") ?: 0
+                val albumId = entry.arguments?.getLong("albumId")?.takeIf { it >= 0 }
                 PhotoViewerScreen(
                     startIndex = index,
+                    albumId = albumId,
                     onBack = { navController.popBackStack() },
                     onEdit = { uri ->
                         navController.navigate("editor?uri=${android.net.Uri.encode(uri)}")
@@ -46,7 +51,9 @@ fun AGalleryNavHost(modifier: Modifier = Modifier) {
             composable("albums") {
                 AlbumsScreen(
                     onBack = { navController.popBackStack() },
-                    onOpenAlbum = { id, name -> navController.navigate("album/$id?name=${android.net.Uri.encode(name)}") }
+                    onOpenAlbum = { id, name ->
+                        navController.navigate("album/$id?name=${android.net.Uri.encode(name)}")
+                    }
                 )
             }
 
@@ -57,10 +64,15 @@ fun AGalleryNavHost(modifier: Modifier = Modifier) {
                     navArgument("name") { type = NavType.StringType; defaultValue = "Album" }
                 )
             ) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                val name = entry.arguments?.getString("name") ?: "Album"
                 AlbumDetailScreen(
-                    albumId = entry.arguments?.getLong("id") ?: 0L,
-                    albumName = entry.arguments?.getString("name") ?: "Album",
-                    onBack = { navController.popBackStack() }
+                    albumId = id,
+                    albumName = name,
+                    onBack = { navController.popBackStack() },
+                    onOpenViewer = { index ->
+                        navController.navigate("viewer/$index?albumId=$id")
+                    }
                 )
             }
 
