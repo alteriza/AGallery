@@ -12,12 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import com.agallery.app.ui.theme.LocalGlassColors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
 
 val LocalHazeState = compositionLocalOf<HazeState?> { null }
 
@@ -62,31 +62,22 @@ fun GlassSurface(
 @Composable
 fun GlassBackground(content: @Composable BoxScope.() -> Unit) {
     val g = LocalGlassColors.current
-    val hazeState = LocalHazeState.current
-
     Box(
         Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(g.bgTop, g.bgBottom)))
     ) {
-        // Decorative blobs (tidak jadi source blur)
         Box(
-            Modifier.fillMaxSize().background(
-                Brush.radialGradient(
-                    listOf(g.top.copy(alpha = 0.35f), androidx.compose.ui.graphics.Color.Transparent),
-                    center = Offset(200f, 300f),
-                    radius = 900f
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(g.top.copy(alpha = 0.35f), Color.Transparent),
+                        center = Offset(200f, 300f),
+                        radius = 900f
+                    )
                 )
-            )
         )
-
-        // Konten yang akan diblur di bawah panel glass
-        if (hazeState != null) {
-            Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
-                content()
-            }
-        } else {
-            content()
-        }
+        content()
     }
 }
