@@ -29,7 +29,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -56,9 +55,9 @@ import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.GlassBackground
 import com.agallery.app.ui.theme.LocalGlassColors
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import androidx.compose.foundation.layout.height
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -152,7 +151,12 @@ fun PhotoGridScreen(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .hazeEffect(hazeState)
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeStyle(
+                            backgroundColor = LocalGlassColors.current.bgTop.copy(alpha = 0.15f)
+                        )
+                    )
                     .background(LocalGlassColors.current.bgTop.copy(alpha = 0.35f))
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
