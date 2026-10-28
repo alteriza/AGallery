@@ -45,7 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import coil.request.videoFrameMillis
+import coil.request.videoFramePercent
 import com.agallery.app.data.model.Photo
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.GlassBackground
@@ -72,9 +72,7 @@ fun AlbumDetailScreen(
             val validUris = photos.map { it.uri.toString() }.toSet()
             val cleaned = selectedUris.intersect(validUris)
             if (cleaned != selectedUris) selectedUris = cleaned
-            if (cleaned.isEmpty()) {
-                selectionMode = false
-            }
+            if (cleaned.isEmpty()) selectionMode = false
         }
     }
 
@@ -129,11 +127,7 @@ fun AlbumDetailScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White)
                     }
-                    Text(
-                        albumName,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White
-                    )
+                    Text(albumName, style = MaterialTheme.typography.titleLarge, color = Color.White)
                 }
             }
 
@@ -148,7 +142,11 @@ fun AlbumDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    itemsIndexed(photos, key = { _, p -> p.uri.toString() }) { index, photo ->
+                    itemsIndexed(
+                        items = photos,
+                        key = { _, p -> p.uri.toString() },
+                        contentType = { _, p -> if (p.isVideo) "video" else "image" }
+                    ) { index, photo ->
                         val uri = photo.uri.toString()
                         val selected = uri in selectedUris
                         Box(
@@ -164,16 +162,15 @@ fun AlbumDetailScreen(
                                         if (!selectionMode) {
                                             selectionMode = true
                                             selectedUris = setOf(uri)
-                                        } else {
-                                            toggle(photo)
-                                        }
+                                        } else toggle(photo)
                                     }
                                 )
                         ) {
                             AsyncImage(
                                 model = ImageRequest.Builder(ctx)
                                     .data(photo.uri)
-                                    .apply { if (photo.isVideo) videoFrameMillis(1000) }
+                                    .size(400)
+                                    .apply { if (photo.isVideo) videoFramePercent(0.15) }
                                     .build(),
                                 contentDescription = photo.name,
                                 contentScale = ContentScale.Crop,
@@ -189,9 +186,7 @@ fun AlbumDetailScreen(
                                 }
                             }
                             if (selected) {
-                                Box(
-                                    Modifier.fillMaxSize().background(Color(0x557C5CFF))
-                                )
+                                Box(Modifier.fillMaxSize().background(Color(0x557C5CFF)))
                                 Box(
                                     Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp)
                                         .clip(CircleShape)

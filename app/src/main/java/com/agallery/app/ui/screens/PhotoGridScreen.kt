@@ -98,9 +98,7 @@ fun PhotoGridScreen(
             val validUris = photos.map { it.uri.toString() }.toSet()
             val cleaned = selectedUris.intersect(validUris)
             if (cleaned != selectedUris) selectedUris = cleaned
-            if (cleaned.isEmpty()) {
-                selectionMode = false
-            }
+            if (cleaned.isEmpty()) selectionMode = false
         }
     }
 
@@ -139,7 +137,8 @@ fun PhotoGridScreen(
                     ) {
                         itemsIndexed(
                             items = photos,
-                            key = { _, p -> p.uri.toString() }
+                            key = { _, p -> p.uri.toString() },
+                            contentType = { _, p -> if (p.isVideo) "video" else "image" }
                         ) { index, photo ->
                             val uri = photo.uri.toString()
                             val selected = uri in selectedUris
@@ -157,15 +156,14 @@ fun PhotoGridScreen(
                                             if (!selectionMode) {
                                                 selectionMode = true
                                                 selectedUris = setOf(uri)
-                                            } else {
-                                                toggle(photo)
-                                            }
+                                            } else toggle(photo)
                                         }
                                     )
                             ) {
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(photo.uri)
+                                        .size(400)
                                         .crossfade(true)
                                         .build(),
                                     contentDescription = photo.name,
@@ -181,19 +179,11 @@ fun PhotoGridScreen(
                                             .background(Color.Black.copy(alpha = 0.45f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            Icons.Filled.PlayArrow,
-                                            "Video",
-                                            tint = Color.White
-                                        )
+                                        Icon(Icons.Filled.PlayArrow, "Video", tint = Color.White)
                                     }
                                 }
                                 if (selected) {
-                                    Box(
-                                        Modifier
-                                            .fillMaxSize()
-                                            .background(Color(0x557C5CFF))
-                                    )
+                                    Box(Modifier.fillMaxSize().background(Color(0x557C5CFF)))
                                     Box(
                                         Modifier
                                             .align(Alignment.TopEnd)
@@ -328,12 +318,7 @@ fun PhotoGridScreen(
         if (showAlbumPicker) {
             AlertDialog(
                 onDismissRequest = { showAlbumPicker = false },
-                title = {
-                    Text(
-                        "Add ${selectedUris.size} to Album",
-                        color = Color.White
-                    )
-                },
+                title = { Text("Add ${selectedUris.size} to Album", color = Color.White) },
                 text = {
                     Column {
                         if (albums.isEmpty()) Text("No albums yet.", color = Color.White)

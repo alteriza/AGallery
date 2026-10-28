@@ -53,13 +53,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import coil.request.videoFrameMillis
+import coil.request.videoFramePercent
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.GlassBackground
 import com.agallery.app.ui.components.glass
 import com.agallery.app.util.hasManageStoragePermission
 import com.agallery.app.util.openManageStorageSettings
-import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -114,9 +113,7 @@ fun TrashScreen(
             val validUris = trash.map { it.photoUri }.toSet()
             val cleaned = selectedUris.intersect(validUris)
             if (cleaned != selectedUris) selectedUris = cleaned
-            if (cleaned.isEmpty()) {
-                selectionMode = false
-            }
+            if (cleaned.isEmpty()) selectionMode = false
         }
     }
 
@@ -159,7 +156,7 @@ fun TrashScreen(
                         Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White)
                     }
                     Text(
-                        "Trash (7 days)",
+                        "Trash",
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                         color = Color.White
@@ -168,11 +165,7 @@ fun TrashScreen(
                         !hasManageStoragePermission(context)
                     ) {
                         IconButton(onClick = { openManageStorageSettings(context) }) {
-                            Icon(
-                                Icons.Filled.Settings,
-                                "Storage settings",
-                                tint = Color.White
-                            )
+                            Icon(Icons.Filled.Settings, "Storage settings", tint = Color.White)
                         }
                     }
                 }
@@ -190,23 +183,16 @@ fun TrashScreen(
                     items(trash, key = { it.photoUri }) { item ->
                         val uri = item.photoUri
                         val selected = uri in selectedUris
-                        val daysLeft = TimeUnit.MILLISECONDS
-                            .toDays(item.expiresAt - System.currentTimeMillis())
-                            .coerceAtLeast(0)
                         Row(
                             Modifier.fillMaxWidth()
                                 .glass(RoundedCornerShape(16.dp))
                                 .combinedClickable(
-                                    onClick = {
-                                        if (selectionMode) toggle(uri)
-                                    },
+                                    onClick = { if (selectionMode) toggle(uri) },
                                     onLongClick = {
                                         if (!selectionMode) {
                                             selectionMode = true
                                             selectedUris = setOf(uri)
-                                        } else {
-                                            toggle(uri)
-                                        }
+                                        } else toggle(uri)
                                     }
                                 )
                                 .padding(10.dp),
@@ -216,17 +202,15 @@ fun TrashScreen(
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(uri)
-                                        .videoFrameMillis(1000)
+                                        .size(200)
+                                        .videoFramePercent(0.15)
                                         .build(),
                                     contentDescription = item.displayName,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
                                 if (selected) {
-                                    Box(
-                                        Modifier.fillMaxSize()
-                                            .background(Color(0x557C5CFF))
-                                    )
+                                    Box(Modifier.fillMaxSize().background(Color(0x557C5CFF)))
                                     Box(
                                         Modifier.align(Alignment.Center).size(22.dp)
                                             .clip(CircleShape)
@@ -243,19 +227,13 @@ fun TrashScreen(
                                 }
                             }
                             Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    item.displayName,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    color = Color.White
-                                )
-                                Text(
-                                    "Deletes in $daysLeft days",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White
-                                )
-                            }
+                            Text(
+                                item.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f),
+                                color = Color.White
+                            )
                             IconButton(onClick = { vm.restoreFromTrash(uri) }) {
                                 Icon(Icons.Filled.Restore, "Restore", tint = Color.White)
                             }

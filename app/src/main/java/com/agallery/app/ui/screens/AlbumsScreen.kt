@@ -48,7 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import coil.request.videoFrameMillis
+import coil.request.videoFramePercent
 import com.agallery.app.data.model.AlbumUi
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.GlassBackground
@@ -146,9 +146,7 @@ private fun AlbumCard(album: AlbumUi, onClick: () -> Unit, onTogglePin: () -> Un
             .combinedClickable(onClick = onClick, onLongClick = onTogglePin)
             .padding(8.dp)
     ) {
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp))
-        ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp))) {
             when {
                 album.thumbnails.isEmpty() -> {
                     Box(
@@ -160,7 +158,8 @@ private fun AlbumCard(album: AlbumUi, onClick: () -> Unit, onTogglePin: () -> Un
                     AsyncImage(
                         model = ImageRequest.Builder(ctx)
                             .data(album.thumbnails.first())
-                            .videoFrameMillis(1000)
+                            .size(450)
+                            .videoFramePercent(0.15)
                             .build(),
                         contentDescription = album.name,
                         contentScale = ContentScale.Crop,
@@ -211,7 +210,11 @@ private fun AlbumCard(album: AlbumUi, onClick: () -> Unit, onTogglePin: () -> Un
 @Composable
 private fun Thumb(uri: android.net.Uri, modifier: Modifier, ctx: android.content.Context) {
     AsyncImage(
-        model = ImageRequest.Builder(ctx).data(uri).videoFrameMillis(1000).build(),
+        model = ImageRequest.Builder(ctx)
+            .data(uri)
+            .size(450)
+            .videoFramePercent(0.15)
+            .build(),
         contentDescription = null,
         contentScale = ContentScale.Crop,
         modifier = modifier

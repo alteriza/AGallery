@@ -3,6 +3,9 @@ package com.agallery.app.ui.components
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
@@ -50,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -59,6 +62,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -70,6 +74,7 @@ import com.agallery.app.util.photoFromUri
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.delay
 
 @Composable
 fun ViewerOverlay(
@@ -148,8 +153,24 @@ private fun ViewerContent(
     val pagerState = rememberPagerState(initialPage = startIndex) { photos.size }
     val context = LocalContext.current
 
+    var controlsVisible by remember { mutableStateOf(true) }
+    var lastInteraction by remember { mutableStateOf(0L) }
     var showActions by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
+    var currentPlayer by remember { mutableStateOf<ExoPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+
+    LaunchedEffect(controlsVisible, lastInteraction) {
+        if (controlsVisible) {
+            delay(1000)
+            controlsVisible = false
+        }
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        controlsVisible = true
+        lastInteraction = System.currentTimeMillis()
+    }
 
     LaunchedEffect(photos.size) {
         if (photos.isNotEmpty() && pagerState.currentPage >= photos.size) {
@@ -157,7 +178,16 @@ private fun ViewerContent(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f))) {
+    fun markInteraction() {
+        lastInteraction = System.currentTimeMillis()
+    }
+
+    fun toggleControls() {
+        controlsVisible = !controlsVisible
+        markInteraction()
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))) {
         Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
             HorizontalPager(
                 state = pagerState,
@@ -168,53 +198,85 @@ private fun ViewerContent(
                 val photo = photos.getOrNull(page)
                 if (photo != null) {
                     if (photo.isVideo) {
-                        VideoPage(photo = photo, isActive = page == pagerState.currentPage)
+                        VideoPage(
+                            photo = photo,
+                            isActive = page == pagerState.currentPage,
+                            onTap = ::toggleControls,
+                            onPlayerReady = { p -> currentPlayer = p },
+                            onPlayStateChanged = { playing -> isPlaying = playing }
+                        )
                     } else {
-                        ZoomableImage(photo)
+                        ZoomableImage(photo = photo, onTap = ::toggleControls)
                     }
-                }
-            }
-        }
-
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .hazeEffect(state = hazeState, style = glassHazeStyle())
-                .background(LocalGlassColors.current.bgTop.copy(alpha = 0.35f))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White)
-            }
-            Spacer(Modifier.weight(1f))
-            Text(
-                "${pagerState.currentPage + 1}/${photos.size}",
-                color = Color.White,
-                style = MaterialTheme.typography.labelMedium
-            )
-            Spacer(Modifier.width(8.dp))
-            val current = photos.getOrNull(pagerState.currentPage)
-            if (current != null) {
-                IconButton(onClick = {
-                    val mime = context.contentResolver.getType(current.uri)
-                        ?: if (current.isVideo) "video/*" else "image/*"
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = mime
-                        putExtra(Intent.EXTRA_STREAM, current.uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(intent, "Share"))
-                }) {
-                    Icon(Icons.Filled.Share, "Share", tint = Color.White)
-                }
-                IconButton(onClick = { showActions = true }) {
-                    Icon(Icons.Filled.MoreVert, "More", tint = Color.White)
                 }
             }
         }
 
         val current = photos.getOrNull(pagerState.currentPage)
+
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(state = hazeState, style = glassHazeStyle())
+                    .background(LocalGlassColors.current.bgTop.copy(alpha = 0.15f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { markInteraction(); onDismiss() }) {
+                    Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White)
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${pagerState.currentPage + 1}/${photos.size}",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Spacer(Modifier.width(8.dp))
+                if (current != null) {
+                    if (current.isVideo) {
+                        IconButton(onClick = {
+                            markInteraction()
+                            currentPlayer?.let { p ->
+                                runCatching {
+                                    if (p.isPlaying) p.pause() else p.play()
+                                }
+                            }
+                        }) {
+                            Icon(
+                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                "Play/Pause",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                    IconButton(onClick = {
+                        markInteraction()
+                        val mime = context.contentResolver.getType(current.uri)
+                            ?: if (current.isVideo) "video/*" else "image/*"
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = mime
+                            putExtra(Intent.EXTRA_STREAM, current.uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share"))
+                    }) {
+                        Icon(Icons.Filled.Share, "Share", tint = Color.White)
+                    }
+                    IconButton(onClick = {
+                        markInteraction()
+                        showActions = true
+                    }) {
+                        Icon(Icons.Filled.MoreVert, "More", tint = Color.White)
+                    }
+                }
+            }
+        }
 
         if (showActions && current != null) {
             AlertDialog(
@@ -251,7 +313,7 @@ private fun ViewerContent(
 }
 
 @Composable
-private fun ZoomableImage(photo: Photo) {
+private fun ZoomableImage(photo: Photo, onTap: () -> Unit) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
@@ -263,6 +325,7 @@ private fun ZoomableImage(photo: Photo) {
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures(
+                    onTap = { onTap() },
                     onDoubleTap = {
                         if (scale > 1f) {
                             scale = 1f
@@ -273,7 +336,7 @@ private fun ZoomableImage(photo: Photo) {
                     }
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(scale) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     do {
@@ -307,7 +370,13 @@ private fun ZoomableImage(photo: Photo) {
 }
 
 @Composable
-private fun VideoPage(photo: Photo, isActive: Boolean) {
+private fun VideoPage(
+    photo: Photo,
+    isActive: Boolean,
+    onTap: () -> Unit,
+    onPlayerReady: (ExoPlayer?) -> Unit,
+    onPlayStateChanged: (Boolean) -> Unit
+) {
     if (!isActive) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
@@ -320,12 +389,17 @@ private fun VideoPage(photo: Photo, isActive: Boolean) {
         return
     }
     key(photo.uri.toString()) {
-        ActiveVideo(photo)
+        ActiveVideo(photo, onTap, onPlayerReady, onPlayStateChanged)
     }
 }
 
 @Composable
-private fun ActiveVideo(photo: Photo) {
+private fun ActiveVideo(
+    photo: Photo,
+    onTap: () -> Unit,
+    onPlayerReady: (ExoPlayer?) -> Unit,
+    onPlayStateChanged: (Boolean) -> Unit
+) {
     val context = LocalContext.current
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -345,18 +419,32 @@ private fun ActiveVideo(photo: Photo) {
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose { runCatching { exo.release() } }
+    DisposableEffect(exo) {
+        onPlayerReady(exo)
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) {
+                onPlayStateChanged(playing)
+            }
+        }
+        exo.addListener(listener)
+        onDispose {
+            exo.removeListener(listener)
+            onPlayerReady(null)
+            runCatching { exo.release() }
+        }
     }
 
     Box(
         Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
+                detectTapGestures(onTap = { onTap() })
+            }
+            .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val event = awaitPointerEvent()
                         val pressed = event.changes.count { it.pressed }
                         if (pressed >= 2) {
                             val zoom = event.calculateZoom()
@@ -364,6 +452,12 @@ private fun ActiveVideo(photo: Photo) {
                             if (zoom != 1f || pan != Offset.Zero) {
                                 scale = (scale * zoom).coerceIn(1f, 5f)
                                 if (scale > 1f) offset += pan else offset = Offset.Zero
+                                event.changes.forEach { it.consume() }
+                            }
+                        } else if (scale > 1f) {
+                            val pan = event.calculatePan()
+                            if (pan != Offset.Zero) {
+                                offset += pan
                                 event.changes.forEach { it.consume() }
                             }
                         }
@@ -381,7 +475,7 @@ private fun ActiveVideo(photo: Photo) {
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 PlayerView(ctx).apply {
-                    useController = true
+                    useController = false
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }

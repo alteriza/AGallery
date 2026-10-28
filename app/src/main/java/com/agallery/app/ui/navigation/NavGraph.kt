@@ -58,9 +58,9 @@ fun AGalleryNavHost(
         Box(
             Modifier
                 .fillMaxSize()
-                .then(if (overlayActive) Modifier.blur(20.dp) else Modifier)
+                .then(if (overlayActive) Modifier.blur(10.dp) else Modifier)
                 .background(
-                    if (overlayActive) Color.Black.copy(alpha = 0.35f) else Color.Transparent
+                    if (overlayActive) Color.Black.copy(alpha = 0.25f) else Color.Transparent
                 )
         ) {
             PermissionGate(onPermissionsGranted = { vm.refresh() }) {

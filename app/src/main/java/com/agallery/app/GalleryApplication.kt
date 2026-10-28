@@ -5,6 +5,8 @@ import android.util.Log
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.agallery.app.data.local.AppDatabase
 import com.agallery.app.data.repository.GalleryRepository
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -40,5 +42,16 @@ class GalleryApplication : Application(), ImageLoaderFactory {
         ImageLoader.Builder(this)
             .components { add(VideoFrameDecoder.Factory()) }
             .crossfade(true)
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.30)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(512L * 1024 * 1024)
+                    .build()
+            }
             .build()
 }
