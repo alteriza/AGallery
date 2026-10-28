@@ -215,33 +215,41 @@ fun AlbumDetailScreen(
                                 }
                             }
                             Box(Modifier.fillMaxSize().background(overlayColor))
-                            AnimatedVisibility(
+                            AlbumSelectionCheckmark(
                                 visible = selected,
-                                enter = scaleIn(initialScale = 0.4f) + fadeIn(),
-                                exit = scaleOut(targetScale = 0.4f) + fadeOut(),
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(6.dp)
-                            ) {
-                                Box(
-                                    Modifier
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF7C5CFF)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Check,
-                                        "Selected",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AlbumSelectionCheckmark(visible: Boolean, modifier: Modifier) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn(initialScale = 0.4f) + fadeIn(),
+        exit = scaleOut(targetScale = 0.4f) + fadeOut(),
+        modifier = modifier
+    ) {
+        Box(
+            Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF7C5CFF)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Filled.Check,
+                "Selected",
+                tint = Color.White,
+                modifier = Modifier.size(14.dp)
+            )
         }
     }
 }
