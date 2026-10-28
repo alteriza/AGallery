@@ -96,7 +96,7 @@ fun PhotoGridScreen(
             Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 if (loading && photos.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = Color.White)
                     }
                 } else {
                     LazyVerticalGrid(
@@ -161,9 +161,14 @@ fun PhotoGridScreen(
                 "AGallery",
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(24.dp),
+                    .padding(24.dp)
+                    .clip(RoundedCornerShape(50))
+                    .hazeEffect(state = hazeState, style = glassHazeStyle())
+                    .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White
             )
 
             Row(
@@ -206,20 +211,27 @@ fun PhotoGridScreen(
         menuPhoto?.let { photo ->
             AlertDialog(
                 onDismissRequest = { menuPhoto = null },
-                title = { Text(photo.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = {
+                    Text(
+                        photo.name,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.White
+                    )
+                },
                 text = {
                     Column {
                         TextButton(onClick = { showAlbumPicker = true }) {
-                            Text("Tambahkan ke Album")
+                            Text("Add to Album")
                         }
                         TextButton(onClick = {
                             vm.moveToTrash(photo)
                             menuPhoto = null
-                        }) { Text("Hapus (Trash)") }
+                        }) { Text("Move to Trash") }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { menuPhoto = null }) { Text("Tutup") }
+                    TextButton(onClick = { menuPhoto = null }) { Text("Close") }
                 }
             )
         }
@@ -227,10 +239,10 @@ fun PhotoGridScreen(
         if (showAlbumPicker) {
             AlertDialog(
                 onDismissRequest = { showAlbumPicker = false },
-                title = { Text("Pilih Album") },
+                title = { Text("Choose Album", color = Color.White) },
                 text = {
                     Column {
-                        if (albums.isEmpty()) Text("Belum ada album.")
+                        if (albums.isEmpty()) Text("No albums yet.", color = Color.White)
                         albums.forEach { a ->
                             TextButton(onClick = {
                                 menuPhoto?.let { vm.addPhotoToAlbum(a.id, it.uri) }
@@ -241,7 +253,7 @@ fun PhotoGridScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showAlbumPicker = false }) { Text("Batal") }
+                    TextButton(onClick = { showAlbumPicker = false }) { Text("Cancel") }
                 }
             )
         }
@@ -262,7 +274,7 @@ private fun NavPillButton(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.onSurface)
-        Text(label, style = MaterialTheme.typography.labelMedium)
+        Icon(icon, contentDescription = label, tint = Color.White)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White)
     }
 }
