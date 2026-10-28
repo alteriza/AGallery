@@ -50,9 +50,7 @@ class GalleryRepository(
                     if (existing == null) {
                         val name = items.firstOrNull()?.bucket?.ifBlank { "Folder $bucketId" }
                             ?: "Folder $bucketId"
-                        db.albumDao().insertIgnore(
-                            AlbumEntity(name = name, bucketId = bucketId)
-                        )
+                        db.albumDao().insertIgnore(AlbumEntity(name = name, bucketId = bucketId))
                     }
                 } catch (e: Exception) {
                     Log.e("GalleryRepository", "sync bucket $bucketId failed", e)
@@ -109,20 +107,36 @@ class GalleryRepository(
         runCatching { db.trashDao().remove(uriString) }
     }
 
+    suspend fun deleteFilePermanently(
+        uriString: String,
+        attemptMediaStoreDelete: Boolean
+    ): Boolean = withContext(Dispatchers.IO) {
+        var mediaStoreOk = true
+        if (attemptMediaStoreDelete) {
+            mediaStoreOk = runCatching {
+                context.contentResolver.delete(Uri.parse(uriString), null, null) > 0
+            }.getOrDefault(false)
+        }
+        runCatching { db.trashDao().remove(uriString) }
+        runCatching { db.albumDao().removePhotoByUri(uriString) }
+        mediaStoreOk
+    }
+
     suspend fun deleteFileDirect(uriString: String): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            context.contentResolver.delete(Uri.parse(uriString), null, null) > 0
-        }.getOrDefault(false)
+        deleteFilePermanently(uriString, attemptMediaStoreDelete = true)
     }
 
     suspend fun purgeExpired() = withContext(Dispatchers.IO) {
         runCatching {
             val expired = db.trashDao().getExpired(System.currentTimeMillis())
             expired.forEach { item ->
-                runCatching {
-                    context.contentResolver.delete(Uri.parse(item.photoUri), null, null)
+                val deleted = runCatching {
+                    context.contentResolver.delete(Uri.parse(item.photoUri), null, null) > 0
+                }.getOrDefault(false)
+                if (deleted) {
+                    runCatching { db.trashDao().remove(item.photoUri) }
+                    runCatching { db.albumDao().removePhotoByUri(item.photoUri) }
                 }
-                runCatching { db.trashDao().remove(item.photoUri) }
             }
         }.onFailure { Log.e("GalleryRepository", "purgeExpired failed", it) }
     }
