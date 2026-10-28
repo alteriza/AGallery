@@ -14,7 +14,7 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = "0.1-beta"
+        versionName = "0.2-beta"
         vectorDrawables { useSupportLibrary = true }
     }
 
