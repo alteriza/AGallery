@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -60,10 +61,13 @@ fun PermissionGate(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(24.dp)
             ) {
-                Text("Izin akses galeri & video diperlukan.")
+                Text(
+                    "Gallery & video access is required.",
+                    color = Color.White
+                )
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = { state.launchMultiplePermissionRequest() }) {
-                    Text("Beri Izin")
+                    Text("Grant Permission")
                 }
             }
         }
