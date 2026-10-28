@@ -2,6 +2,7 @@ package com.agallery.app.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,8 +12,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -27,7 +30,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -44,16 +46,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.agallery.app.data.model.Photo
-import com.agallery.app.ui.components.glassHazeStyle
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.GlassBackground
+import com.agallery.app.ui.components.glassHazeStyle
 import com.agallery.app.ui.theme.LocalGlassColors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
@@ -88,6 +92,7 @@ fun PhotoGridScreen(
 
     GlassBackground {
         Box(Modifier.fillMaxSize()) {
+
             Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 if (loading && photos.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -98,10 +103,10 @@ fun PhotoGridScreen(
                         state = gridState,
                         columns = GridCells.Adaptive(110.dp),
                         contentPadding = PaddingValues(
-                            top = 84.dp,
+                            top = 88.dp,
                             start = 12.dp,
                             end = 12.dp,
-                            bottom = 12.dp
+                            bottom = 104.dp
                         ),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -139,7 +144,11 @@ fun PhotoGridScreen(
                                             .background(Color.Black.copy(alpha = 0.45f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.Filled.PlayArrow, "Video", tint = Color.White)
+                                        Icon(
+                                            Icons.Filled.PlayArrow,
+                                            "Video",
+                                            tint = Color.White
+                                        )
                                     }
                                 }
                             }
@@ -148,33 +157,49 @@ fun PhotoGridScreen(
                 }
             }
 
+            Text(
+                "AGallery",
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(24.dp),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+
             Row(
                 Modifier
-                    .fillMaxWidth()
-                    .hazeEffect(
-                        state = hazeState,
-                        style = glassHazeStyle()
-                    )
-                    .background(LocalGlassColors.current.bgTop.copy(alpha = 0.35f))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp)
+                    .clip(RoundedCornerShape(50))
+                    .hazeEffect(state = hazeState, style = glassHazeStyle())
+                    .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "AGallery",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f)
+                NavPillButton(
+                    icon = Icons.Filled.PhotoAlbum,
+                    label = "Albums",
+                    onClick = onNavigateAlbums
                 )
-                IconButton(onClick = onNavigateAlbums) {
-                    Icon(Icons.Filled.PhotoAlbum, "Albums")
-                }
-                IconButton(onClick = onNavigateTrash) {
-                    Icon(Icons.Filled.DeleteOutline, "Trash")
-                }
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(24.dp)
+                        .background(LocalGlassColors.current.border.copy(alpha = 0.3f))
+                )
+                NavPillButton(
+                    icon = Icons.Filled.DeleteOutline,
+                    label = "Trash",
+                    onClick = onNavigateTrash
+                )
             }
 
             SnackbarHost(
                 hostState = snackbarHost,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 104.dp)
             )
         }
 
@@ -220,5 +245,24 @@ fun PhotoGridScreen(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun NavPillButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.onSurface)
+        Text(label, style = MaterialTheme.typography.labelMedium)
     }
 }
