@@ -29,7 +29,7 @@ interface AlbumDao {
     @Insert
     suspend fun insert(album: AlbumEntity): Long
 
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIgnore(album: AlbumEntity): Long
 
     @Query("DELETE FROM albums WHERE id = :id")
@@ -46,6 +46,9 @@ interface AlbumDao {
 
     @Query("DELETE FROM album_photos WHERE albumId = :albumId AND photoUri = :uri")
     suspend fun removePhoto(albumId: Long, uri: String)
+
+    @Query("DELETE FROM album_photos WHERE photoUri = :uri")
+    suspend fun removePhotoByUri(uri: String)
 }
 
 @Dao
