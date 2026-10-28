@@ -105,8 +105,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     if (album.bucketId != null) {
                         photoList.filter { it.bucketId == album.bucketId }
                     } else {
-                        val uriSet = refs
-                            .filter { it.albumId == albumId }
+                        val uriSet = refs.filter { it.albumId == albumId }
                             .map { it.photoUri }
                             .toSet()
                         photoList.filter { it.uri.toString() in uriSet }
@@ -181,6 +180,16 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun moveMultipleToTrash(items: List<Photo>) = viewModelScope.launch {
+        if (items.isEmpty()) return@launch
+        try {
+            items.forEach { repo.moveToTrash(it) }
+            _message.value = "${items.size} items moved to Trash"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "moveMultipleToTrash failed", e)
+        }
+    }
+
     fun restoreFromTrash(uri: String) = viewModelScope.launch {
         try {
             repo.restoreFromTrash(uri)
@@ -190,23 +199,46 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun finalizeTrashDeletion(uri: String) = viewModelScope.launch {
+    fun finalizeTrashDeletion(uri: String) = finalizeMultipleTrashDeletion(listOf(uri))
+
+    fun finalizeMultipleTrashDeletion(uris: List<String>) = viewModelScope.launch {
+        if (uris.isEmpty()) return@launch
         try {
-            repo.removeFromTrashDb(uri)
-            _message.value = "Deleted permanently"
+            uris.forEach { uri ->
+                repo.deleteFilePermanently(uri, attemptMediaStoreDelete = false)
+            }
+            _raw.value = _raw.value.filter { it.uri.toString() !in uris }
+            _message.value = if (uris.size == 1) "Deleted permanently"
+            else "${uris.size} items deleted"
         } catch (e: Exception) {
-            Log.e("GalleryViewModel", "finalizeTrashDeletion failed", e)
+            Log.e("GalleryViewModel", "finalizeMultipleTrashDeletion failed", e)
         }
     }
 
     fun deleteFileDirect(uri: String) = viewModelScope.launch {
         try {
-            val ok = repo.deleteFileDirect(uri)
-            repo.removeFromTrashDb(uri)
+            val ok = repo.deleteFilePermanently(uri, attemptMediaStoreDelete = true)
+            _raw.value = _raw.value.filter { it.uri.toString() != uri }
             _message.value = if (ok) "Deleted permanently"
             else "Removed from Trash (file not deleted)"
         } catch (e: Exception) {
             Log.e("GalleryViewModel", "deleteFileDirect failed", e)
+        }
+    }
+
+    fun deleteMultiplePermanently(uris: List<String>) = viewModelScope.launch {
+        if (uris.isEmpty()) return@launch
+        try {
+            var allOk = true
+            uris.forEach { uri ->
+                val ok = repo.deleteFilePermanently(uri, attemptMediaStoreDelete = true)
+                if (!ok) allOk = false
+            }
+            _raw.value = _raw.value.filter { it.uri.toString() !in uris }
+            _message.value = if (allOk) "${uris.size} items deleted"
+            else "${uris.size} items processed"
+        } catch (e: Exception) {
+            Log.e("GalleryViewModel", "deleteMultiplePermanently failed", e)
         }
     }
 
