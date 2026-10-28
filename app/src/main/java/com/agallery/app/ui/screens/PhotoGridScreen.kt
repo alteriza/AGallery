@@ -1,6 +1,17 @@
 package com.agallery.app.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -142,6 +153,11 @@ fun PhotoGridScreen(
                         ) { index, photo ->
                             val uri = photo.uri.toString()
                             val selected = uri in selectedUris
+                            val overlayColor by animateColorAsState(
+                                targetValue = if (selected) Color(0x557C5CFF) else Color.Transparent,
+                                animationSpec = tween(200),
+                                label = "selection_overlay"
+                            )
                             Box(
                                 Modifier
                                     .aspectRatio(1f)
@@ -182,12 +198,17 @@ fun PhotoGridScreen(
                                         Icon(Icons.Filled.PlayArrow, "Video", tint = Color.White)
                                     }
                                 }
-                                if (selected) {
-                                    Box(Modifier.fillMaxSize().background(Color(0x557C5CFF)))
+                                Box(Modifier.fillMaxSize().background(overlayColor))
+                                AnimatedVisibility(
+                                    visible = selected,
+                                    enter = scaleIn(initialScale = 0.4f) + fadeIn(),
+                                    exit = scaleOut(targetScale = 0.4f) + fadeOut(),
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(6.dp)
+                                ) {
                                     Box(
                                         Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(6.dp)
                                             .size(22.dp)
                                             .clip(CircleShape)
                                             .background(Color(0xFF7C5CFF)),
@@ -207,103 +228,119 @@ fun PhotoGridScreen(
                 }
             }
 
-            if (selectionMode) {
-                Row(
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(16.dp)
-                        .clip(RoundedCornerShape(50))
-                        .hazeEffect(state = hazeState, style = glassHazeStyle())
-                        .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = ::exit) {
-                        Icon(Icons.Filled.Close, "Cancel", tint = Color.White)
+            AnimatedContent(
+                targetState = selectionMode,
+                transitionSpec = {
+                    (slideInVertically(initialOffsetY = { -it }) + fadeIn()) togetherWith
+                        (slideOutVertically(targetOffsetY = { -it }) + fadeOut())
+                },
+                label = "top_bar",
+                modifier = Modifier.align(Alignment.TopStart)
+            ) { isSelecting ->
+                if (isSelecting) {
+                    Row(
+                        Modifier
+                            .padding(16.dp)
+                            .clip(RoundedCornerShape(50))
+                            .hazeEffect(state = hazeState, style = glassHazeStyle())
+                            .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = ::exit) {
+                            Icon(Icons.Filled.Close, "Cancel", tint = Color.White)
+                        }
+                        Text(
+                            "${selectedUris.size} selected",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                        TextButton(onClick = {
+                            selectedUris = photos.map { it.uri.toString() }.toSet()
+                        }) { Text("All", color = Color.White) }
                     }
+                } else {
                     Text(
-                        "${selectedUris.size} selected",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(horizontal = 8.dp)
+                        "AGallery",
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .clip(RoundedCornerShape(50))
+                            .hazeEffect(state = hazeState, style = glassHazeStyle())
+                            .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
                     )
-                    TextButton(onClick = {
-                        selectedUris = photos.map { it.uri.toString() }.toSet()
-                    }) { Text("All", color = Color.White) }
                 }
-            } else {
-                Text(
-                    "AGallery",
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(24.dp)
-                        .clip(RoundedCornerShape(50))
-                        .hazeEffect(state = hazeState, style = glassHazeStyle())
-                        .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
             }
 
-            if (selectionMode) {
-                Row(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 24.dp)
-                        .clip(RoundedCornerShape(50))
-                        .hazeEffect(state = hazeState, style = glassHazeStyle())
-                        .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { showAlbumPicker = true }) {
-                        Icon(Icons.Filled.PhotoAlbum, "Add to Album", tint = Color.White)
-                    }
-                    Box(
+            AnimatedContent(
+                targetState = selectionMode,
+                transitionSpec = {
+                    (slideInVertically(initialOffsetY = { it }) + fadeIn()) togetherWith
+                        (slideOutVertically(targetOffsetY = { it }) + fadeOut())
+                },
+                label = "bottom_bar",
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp)
+            ) { isSelecting ->
+                if (isSelecting) {
+                    Row(
                         Modifier
-                            .width(1.dp)
-                            .height(24.dp)
-                            .background(LocalGlassColors.current.border.copy(alpha = 0.3f))
-                    )
-                    IconButton(onClick = {
-                        val items = photos.filter { it.uri.toString() in selectedUris }
-                        vm.moveMultipleToTrash(items)
-                        exit()
-                    }) {
-                        Icon(Icons.Filled.DeleteOutline, "Delete", tint = Color.White)
+                            .clip(RoundedCornerShape(50))
+                            .hazeEffect(state = hazeState, style = glassHazeStyle())
+                            .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { showAlbumPicker = true }) {
+                            Icon(Icons.Filled.PhotoAlbum, "Add to Album", tint = Color.White)
+                        }
+                        Box(
+                            Modifier
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(LocalGlassColors.current.border.copy(alpha = 0.3f))
+                        )
+                        IconButton(onClick = {
+                            val items = photos.filter { it.uri.toString() in selectedUris }
+                            vm.moveMultipleToTrash(items)
+                            exit()
+                        }) {
+                            Icon(Icons.Filled.DeleteOutline, "Delete", tint = Color.White)
+                        }
                     }
-                }
-            } else {
-                Row(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 24.dp)
-                        .clip(RoundedCornerShape(50))
-                        .hazeEffect(state = hazeState, style = glassHazeStyle())
-                        .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    NavPillButton(
-                        icon = Icons.Filled.PhotoAlbum,
-                        label = "Albums",
-                        onClick = onNavigateAlbums
-                    )
-                    Box(
+                } else {
+                    Row(
                         Modifier
-                            .width(1.dp)
-                            .height(24.dp)
-                            .background(LocalGlassColors.current.border.copy(alpha = 0.3f))
-                    )
-                    NavPillButton(
-                        icon = Icons.Filled.DeleteOutline,
-                        label = "Trash",
-                        onClick = onNavigateTrash
-                    )
+                            .clip(RoundedCornerShape(50))
+                            .hazeEffect(state = hazeState, style = glassHazeStyle())
+                            .background(LocalGlassColors.current.bgTop.copy(alpha = 0.4f))
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        NavPillButton(
+                            icon = Icons.Filled.PhotoAlbum,
+                            label = "Albums",
+                            onClick = onNavigateAlbums
+                        )
+                        Box(
+                            Modifier
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(LocalGlassColors.current.border.copy(alpha = 0.3f))
+                        )
+                        NavPillButton(
+                            icon = Icons.Filled.DeleteOutline,
+                            label = "Trash",
+                            onClick = onNavigateTrash
+                        )
+                    }
                 }
             }
 

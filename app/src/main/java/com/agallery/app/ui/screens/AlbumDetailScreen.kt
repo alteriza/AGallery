@@ -1,5 +1,16 @@
 package com.agallery.app.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -89,45 +100,58 @@ fun AlbumDetailScreen(
 
     GlassBackground {
         Column(Modifier.fillMaxSize()) {
-
-            if (selectionMode) {
-                Row(
-                    Modifier.fillMaxWidth().padding(16.dp)
-                        .glass(RoundedCornerShape(22.dp))
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = ::exit) {
-                        Icon(Icons.Filled.Close, "Cancel", tint = Color.White)
+            AnimatedContent(
+                targetState = selectionMode,
+                transitionSpec = {
+                    (slideInVertically(initialOffsetY = { -it }) + fadeIn()) togetherWith
+                        (slideOutVertically(targetOffsetY = { -it }) + fadeOut())
+                },
+                label = "album_top_bar",
+                modifier = Modifier.fillMaxWidth()
+            ) { isSelecting ->
+                if (isSelecting) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp)
+                            .glass(RoundedCornerShape(22.dp))
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = ::exit) {
+                            Icon(Icons.Filled.Close, "Cancel", tint = Color.White)
+                        }
+                        Text(
+                            "${selectedUris.size} selected",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                            color = Color.White
+                        )
+                        TextButton(onClick = {
+                            selectedUris = photos.map { it.uri.toString() }.toSet()
+                        }) { Text("All", color = Color.White) }
+                        IconButton(onClick = {
+                            val items = photos.filter { it.uri.toString() in selectedUris }
+                            vm.moveMultipleToTrash(items)
+                            exit()
+                        }) {
+                            Icon(Icons.Filled.DeleteOutline, "Delete", tint = Color.White)
+                        }
                     }
-                    Text(
-                        "${selectedUris.size} selected",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                        color = Color.White
-                    )
-                    TextButton(onClick = {
-                        selectedUris = photos.map { it.uri.toString() }.toSet()
-                    }) { Text("All", color = Color.White) }
-                    IconButton(onClick = {
-                        val items = photos.filter { it.uri.toString() in selectedUris }
-                        vm.moveMultipleToTrash(items)
-                        exit()
-                    }) {
-                        Icon(Icons.Filled.DeleteOutline, "Delete", tint = Color.White)
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp)
+                            .glass(RoundedCornerShape(22.dp))
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White)
+                        }
+                        Text(
+                            albumName,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White
+                        )
                     }
-                }
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().padding(16.dp)
-                        .glass(RoundedCornerShape(22.dp))
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White)
-                    }
-                    Text(albumName, style = MaterialTheme.typography.titleLarge, color = Color.White)
                 }
             }
 
@@ -149,6 +173,11 @@ fun AlbumDetailScreen(
                     ) { index, photo ->
                         val uri = photo.uri.toString()
                         val selected = uri in selectedUris
+                        val overlayColor by animateColorAsState(
+                            targetValue = if (selected) Color(0x557C5CFF) else Color.Transparent,
+                            animationSpec = tween(200),
+                            label = "album_selection_overlay"
+                        )
                         Box(
                             Modifier.aspectRatio(1f)
                                 .clip(RoundedCornerShape(12.dp))
@@ -185,10 +214,18 @@ fun AlbumDetailScreen(
                                     Icon(Icons.Filled.PlayArrow, null, tint = Color.White)
                                 }
                             }
-                            if (selected) {
-                                Box(Modifier.fillMaxSize().background(Color(0x557C5CFF)))
+                            Box(Modifier.fillMaxSize().background(overlayColor))
+                            AnimatedVisibility(
+                                visible = selected,
+                                enter = scaleIn(initialScale = 0.4f) + fadeIn(),
+                                exit = scaleOut(targetScale = 0.4f) + fadeOut(),
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(6.dp)
+                            ) {
                                 Box(
-                                    Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp)
+                                    Modifier
+                                        .size(22.dp)
                                         .clip(CircleShape)
                                         .background(Color(0xFF7C5CFF)),
                                     contentAlignment = Alignment.Center

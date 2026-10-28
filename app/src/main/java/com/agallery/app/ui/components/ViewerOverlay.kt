@@ -1,6 +1,10 @@
 package com.agallery.app.ui.components
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -26,6 +30,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -36,6 +42,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +53,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -75,6 +83,8 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import java.util.Locale
 
 @Composable
 fun ViewerOverlay(
@@ -154,11 +164,9 @@ private fun ViewerContent(
     val context = LocalContext.current
 
     var controlsVisible by remember { mutableStateOf(true) }
-    var lastInteraction by remember { mutableStateOf(0L) }
+    var lastInteraction by remember { mutableLongStateOf(0L) }
     var showActions by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
-    var currentPlayer by remember { mutableStateOf<ExoPlayer?>(null) }
-    var isPlaying by remember { mutableStateOf(false) }
 
     LaunchedEffect(controlsVisible, lastInteraction) {
         if (controlsVisible) {
@@ -201,9 +209,8 @@ private fun ViewerContent(
                         VideoPage(
                             photo = photo,
                             isActive = page == pagerState.currentPage,
-                            onTap = ::toggleControls,
-                            onPlayerReady = { p -> currentPlayer = p },
-                            onPlayStateChanged = { playing -> isPlaying = playing }
+                            controlsVisible = controlsVisible,
+                            onTap = ::toggleControls
                         )
                     } else {
                         ZoomableImage(photo = photo, onTap = ::toggleControls)
@@ -239,22 +246,6 @@ private fun ViewerContent(
                 )
                 Spacer(Modifier.width(8.dp))
                 if (current != null) {
-                    if (current.isVideo) {
-                        IconButton(onClick = {
-                            markInteraction()
-                            currentPlayer?.let { p ->
-                                runCatching {
-                                    if (p.isPlaying) p.pause() else p.play()
-                                }
-                            }
-                        }) {
-                            Icon(
-                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                "Play/Pause",
-                                tint = Color.White
-                            )
-                        }
-                    }
                     IconButton(onClick = {
                         markInteraction()
                         val mime = context.contentResolver.getType(current.uri)
@@ -336,7 +327,7 @@ private fun ZoomableImage(photo: Photo, onTap: () -> Unit) {
                     }
                 )
             }
-            .pointerInput(scale) {
+            .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     do {
@@ -345,11 +336,14 @@ private fun ZoomableImage(photo: Photo, onTap: () -> Unit) {
                         if (pressed >= 2) {
                             val zoom = event.calculateZoom()
                             val pan = event.calculatePan()
-                            if (zoom != 1f || pan != Offset.Zero) {
+                            if (zoom != 1f) {
                                 scale = (scale * zoom).coerceIn(1f, 5f)
-                                if (scale > 1f) offset += pan else offset = Offset.Zero
-                                event.changes.forEach { it.consume() }
+                                if (scale == 1f) offset = Offset.Zero
                             }
+                            if (scale > 1f && pan != Offset.Zero) {
+                                offset += pan
+                            }
+                            event.changes.forEach { it.consume() }
                         } else if (scale > 1f) {
                             val pan = event.calculatePan()
                             if (pan != Offset.Zero) {
@@ -373,9 +367,8 @@ private fun ZoomableImage(photo: Photo, onTap: () -> Unit) {
 private fun VideoPage(
     photo: Photo,
     isActive: Boolean,
-    onTap: () -> Unit,
-    onPlayerReady: (ExoPlayer?) -> Unit,
-    onPlayStateChanged: (Boolean) -> Unit
+    controlsVisible: Boolean,
+    onTap: () -> Unit
 ) {
     if (!isActive) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -389,20 +382,27 @@ private fun VideoPage(
         return
     }
     key(photo.uri.toString()) {
-        ActiveVideo(photo, onTap, onPlayerReady, onPlayStateChanged)
+        ActiveVideo(photo, controlsVisible, onTap)
     }
 }
 
 @Composable
 private fun ActiveVideo(
     photo: Photo,
-    onTap: () -> Unit,
-    onPlayerReady: (ExoPlayer?) -> Unit,
-    onPlayStateChanged: (Boolean) -> Unit
+    controlsVisible: Boolean,
+    onTap: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
+
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var showPauseIcon by remember { mutableStateOf(true) }
+    var currentPosition by remember { mutableLongStateOf(0L) }
+    var duration by remember { mutableLongStateOf(0L) }
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekPosition by remember { mutableLongStateOf(0L) }
+    var isFullscreen by remember { mutableStateOf(false) }
 
     val exo = remember {
         ExoPlayer.Builder(context).build().apply {
@@ -420,17 +420,52 @@ private fun ActiveVideo(
     }
 
     DisposableEffect(exo) {
-        onPlayerReady(exo)
         val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) {
-                onPlayStateChanged(playing)
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                showPauseIcon = playWhenReady
+            }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    showPauseIcon = false
+                }
             }
         }
         exo.addListener(listener)
         onDispose {
             exo.removeListener(listener)
-            onPlayerReady(null)
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             runCatching { exo.release() }
+        }
+    }
+
+    LaunchedEffect(exo) {
+        while (isActive) {
+            if (!isSeeking) {
+                runCatching {
+                    currentPosition = exo.currentPosition
+                    val dur = exo.duration
+                    duration = if (dur == C.TIME_UNSET || dur < 0) 0 else dur
+                }
+            }
+            delay(250)
+        }
+    }
+
+    fun toggleFullscreen() {
+        val act = activity ?: return
+        if (isFullscreen) {
+            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            isFullscreen = false
+        } else {
+            val videoAspect = if (photo.width > 0 && photo.height > 0) {
+                photo.width.toFloat() / photo.height.toFloat()
+            } else 16f / 9f
+            act.requestedOrientation = if (videoAspect >= 1f) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            }
+            isFullscreen = true
         }
     }
 
@@ -438,7 +473,18 @@ private fun ActiveVideo(
         Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { onTap() })
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onDoubleTap = { pos ->
+                        val w = size.width
+                        val delta = if (pos.x < w / 2) -5000L else 5000L
+                        val newPos = (exo.currentPosition + delta)
+                            .coerceIn(0L, duration.coerceAtLeast(0L))
+                        runCatching { exo.seekTo(newPos) }
+                        onTap()
+                        onTap()
+                    }
+                )
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -449,11 +495,14 @@ private fun ActiveVideo(
                         if (pressed >= 2) {
                             val zoom = event.calculateZoom()
                             val pan = event.calculatePan()
-                            if (zoom != 1f || pan != Offset.Zero) {
+                            if (zoom != 1f) {
                                 scale = (scale * zoom).coerceIn(1f, 5f)
-                                if (scale > 1f) offset += pan else offset = Offset.Zero
-                                event.changes.forEach { it.consume() }
+                                if (scale == 1f) offset = Offset.Zero
                             }
+                            if (scale > 1f && pan != Offset.Zero) {
+                                offset += pan
+                            }
+                            event.changes.forEach { it.consume() }
                         } else if (scale > 1f) {
                             val pan = event.calculatePan()
                             if (pan != Offset.Zero) {
@@ -482,5 +531,89 @@ private fun ActiveVideo(
             },
             update = { view -> view.player = exo }
         )
+
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        formatTime(if (isSeeking) seekPosition else currentPosition),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    Slider(
+                        value = if (isSeeking) seekPosition.toFloat() else currentPosition.toFloat(),
+                        onValueChange = {
+                            seekPosition = it.toLong()
+                            isSeeking = true
+                        },
+                        onValueChangeFinished = {
+                            runCatching { exo.seekTo(seekPosition) }
+                            isSeeking = false
+                        },
+                        valueRange = 0f..duration.toFloat().coerceAtLeast(1f),
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                    )
+                    Text(
+                        formatTime(duration),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = {
+                        runCatching {
+                            if (exo.playWhenReady) exo.pause() else exo.play()
+                        }
+                    }) {
+                        Icon(
+                            if (showPauseIcon) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            "Play/Pause",
+                            tint = Color.White
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = ::toggleFullscreen) {
+                        Icon(
+                            if (isFullscreen) Icons.Filled.FullscreenExit
+                            else Icons.Filled.Fullscreen,
+                            "Fullscreen",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+        }
     }
+}
+
+private fun formatTime(ms: Long): String {
+    if (ms <= 0L) return "0:00"
+    val totalSec = ms / 1000
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) String.format(Locale.getDefault(), "%d:%02d:%02d", h, m, s)
+    else String.format(Locale.getDefault(), "%d:%02d", m, s)
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
