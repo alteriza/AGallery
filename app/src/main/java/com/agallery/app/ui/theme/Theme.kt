@@ -1,19 +1,12 @@
 package com.agallery.app.ui.theme
-import androidx.compose.runtime.remember
-import dev.chrisbanes.haze.HazeState
-import com.agallery.app.ui.components.LocalHazeState
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
+
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
 data class GlassColors(
     val top: Color,
@@ -27,60 +20,49 @@ data class GlassColors(
 
 val LocalGlassColors = staticCompositionLocalOf {
     GlassColors(
-        top = GlassLightTop, bottom = GlassLightBottom, border = GlassLightBorder,
-        bgTop = BgLightTop, bgBottom = BgLightBottom,
-        content = Color(0xFF141428), subtle = Color(0x99141428)
+        top = GlassDarkTop,
+        bottom = GlassDarkBottom,
+        border = GlassDarkBorder,
+        bgTop = BgDarkTop,
+        bgBottom = BgDarkBottom,
+        content = Color.White,
+        subtle = Color(0xB3FFFFFF)
     )
 }
-
-private val LightScheme = lightColorScheme(
-    primary = AccentPurple,
-    secondary = AccentCyan,
-    tertiary = AccentPink,
-    background = BgLightTop,
-    surface = Color.White
-)
 
 private val DarkScheme = darkColorScheme(
     primary = AccentPurple,
     secondary = AccentCyan,
     tertiary = AccentPink,
     background = BgDarkTop,
-    surface = Color(0xFF14141F)
+    surface = Color(0xFF14141F),
+    surfaceVariant = Color(0xFF1E1E2E),
+    onBackground = Color.White,
+    onSurface = Color.White,
+    onSurfaceVariant = Color(0xB3FFFFFF),
+    onPrimary = Color.White,
+    onSecondary = Color.White,
+    onTertiary = Color.White
 )
 
 @Composable
-fun AGalleryTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val context = LocalContext.current
-    val scheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        darkTheme -> DarkScheme
-        else -> LightScheme
-    }
-
-    val glass = if (darkTheme) GlassColors(
-        top = GlassDarkTop, bottom = GlassDarkBottom, border = GlassDarkBorder,
-        bgTop = BgDarkTop, bgBottom = BgDarkBottom,
-        content = Color.White, subtle = Color(0xB3FFFFFF)
-    ) else GlassColors(
-        top = GlassLightTop, bottom = GlassLightBottom, border = GlassLightBorder,
-        bgTop = BgLightTop, bgBottom = BgLightBottom,
-        content = Color(0xFF141428), subtle = Color(0x99141428)
+fun AGalleryTheme(content: @Composable () -> Unit) {
+    val glass = GlassColors(
+        top = GlassDarkTop,
+        bottom = GlassDarkBottom,
+        border = GlassDarkBorder,
+        bgTop = BgDarkTop,
+        bgBottom = BgDarkBottom,
+        content = Color.White,
+        subtle = Color(0xB3FFFFFF)
     )
-
-    val hazeState = remember { HazeState() }
 
     CompositionLocalProvider(
         LocalGlassColors provides glass,
-        LocalHazeState provides hazeState,
+        LocalContentColor provides Color.White
     ) {
         MaterialTheme(
-            colorScheme = scheme,
+            colorScheme = DarkScheme,
             typography = Typography,
             content = content
         )
