@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.agallery.app.data.model.Photo
@@ -23,20 +24,20 @@ import com.agallery.app.util.formatDuration
 fun MediaDetailsDialog(photo: Photo, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Detail Media") },
+        title = { Text("Media Details", color = Color.White) },
         text = {
             Column {
-                DetailRow("Nama", photo.name)
-                DetailRow("Tipe", if (photo.isVideo) "Video" else "Gambar")
-                DetailRow("Resolusi", "${photo.width} × ${photo.height}")
-                DetailRow("Ukuran", formatBytes(photo.size))
-                DetailRow("Tanggal", formatDate(photo.dateTaken))
+                DetailRow("Name", photo.name)
+                DetailRow("Type", if (photo.isVideo) "Video" else "Image")
+                DetailRow("Resolution", "${photo.width} × ${photo.height}")
+                DetailRow("Size", formatBytes(photo.size))
+                DetailRow("Date", formatDate(photo.dateTaken))
                 DetailRow("Album", photo.bucket)
-                if (photo.isVideo) DetailRow("Durasi", formatDuration(photo.duration))
+                if (photo.isVideo) DetailRow("Duration", formatDuration(photo.duration))
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Tutup") }
+            TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
 }
@@ -48,9 +49,10 @@ private fun DetailRow(label: String, value: String) {
             label,
             modifier = Modifier.width(88.dp),
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            color = Color.White
         )
         Spacer(Modifier.width(8.dp))
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = Color.White)
     }
 }
