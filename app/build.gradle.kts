@@ -83,7 +83,7 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 
-    implementation("androidx.media3:media3-exoplayer-core:1.3.1")
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-ui:1.3.1")
 
     implementation("dev.chrisbanes.haze:haze:1.5.0")
