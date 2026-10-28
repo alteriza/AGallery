@@ -139,7 +139,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (name.isBlank()) return@launch
         try {
             repo.createAlbum(name.trim())
-            _message.value = "Album dibuat"
+            _message.value = "Album created"
         } catch (e: Exception) {
             Log.e("GalleryViewModel", "createAlbum failed", e)
         }
@@ -149,7 +149,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         try {
             repo.deleteAlbum(id)
             viewerCache.remove(id)
-            _message.value = "Album dihapus"
+            _message.value = "Album deleted"
         } catch (e: Exception) {
             Log.e("GalleryViewModel", "deleteAlbum failed", e)
         }
@@ -166,7 +166,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun addPhotoToAlbum(albumId: Long, uri: Uri) = viewModelScope.launch {
         try {
             repo.addPhotoToAlbum(albumId, uri)
-            _message.value = "Ditambahkan ke album"
+            _message.value = "Added to album"
         } catch (e: Exception) {
             Log.e("GalleryViewModel", "addPhotoToAlbum failed", e)
         }
@@ -175,7 +175,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun moveToTrash(photo: Photo) = viewModelScope.launch {
         try {
             repo.moveToTrash(photo)
-            _message.value = "Dipindahkan ke Trash"
+            _message.value = "Moved to Trash"
         } catch (e: Exception) {
             Log.e("GalleryViewModel", "moveToTrash failed", e)
         }
@@ -184,7 +184,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun restoreFromTrash(uri: String) = viewModelScope.launch {
         try {
             repo.restoreFromTrash(uri)
-            _message.value = "Dipulihkan"
+            _message.value = "Restored"
         } catch (e: Exception) {
             Log.e("GalleryViewModel", "restoreFromTrash failed", e)
         }
@@ -193,7 +193,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun finalizeTrashDeletion(uri: String) = viewModelScope.launch {
         try {
             repo.removeFromTrashDb(uri)
-            _message.value = "Dihapus permanen"
+            _message.value = "Deleted permanently"
         } catch (e: Exception) {
             Log.e("GalleryViewModel", "finalizeTrashDeletion failed", e)
         }
@@ -203,7 +203,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val ok = repo.deleteFileDirect(uri)
             repo.removeFromTrashDb(uri)
-            _message.value = if (ok) "Dihapus permanen" else "Hanya dihapus dari Trash"
+            _message.value = if (ok) "Deleted permanently"
+            else "Removed from Trash (file not deleted)"
         } catch (e: Exception) {
             Log.e("GalleryViewModel", "deleteFileDirect failed", e)
         }
