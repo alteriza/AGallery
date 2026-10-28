@@ -55,9 +55,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent?.action == Intent.ACTION_VIEW) {
+        if (intent.action == Intent.ACTION_VIEW) {
             intent.data?.toString()?.let { incomingRequest = IncomingRequest(it) }
         }
     }
