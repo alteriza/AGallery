@@ -1,9 +1,12 @@
 package com.agallery.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,13 +19,17 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -51,11 +58,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
-import com.agallery.app.ui.components.glassHazeStyle
 import com.agallery.app.data.model.Photo
 import com.agallery.app.ui.GalleryViewModel
 import com.agallery.app.ui.components.LocalHazeState
+import com.agallery.app.ui.components.MediaDetailsDialog
+import com.agallery.app.ui.components.glassHazeStyle
 import com.agallery.app.ui.theme.LocalGlassColors
+import com.agallery.app.util.photoFromUri
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -65,19 +74,28 @@ fun PhotoViewerScreen(
     vm: GalleryViewModel,
     startIndex: Int,
     albumId: Long? = null,
+    incomingUri: String? = null,
     onBack: () -> Unit,
     onEdit: (String) -> Unit
 ) {
-    val photos by vm.viewerPhotos(albumId).collectAsState()
+    val flowPhotos by vm.viewerPhotos(albumId).collectAsState()
+    val context = LocalContext.current
     val localHazeState = remember { HazeState() }
 
-    var hadPhotos by remember { mutableStateOf(false) }
-    LaunchedEffect(photos.isNotEmpty()) {
-        if (photos.isNotEmpty()) {
-            hadPhotos = true
-        } else if (hadPhotos) {
-            onBack()
+    val photos: List<Photo> = remember(flowPhotos, incomingUri) {
+        if (incomingUri == null) flowPhotos
+        else {
+            val incoming = Uri.parse(incomingUri)
+            if (flowPhotos.any { it.uri == incoming }) flowPhotos
+            else {
+                val extra = photoFromUri(context, incoming)
+                if (extra != null) listOf(extra) + flowPhotos else flowPhotos
+            }
         }
+    }
+
+    LaunchedEffect(photos.isEmpty()) {
+        if (photos.isEmpty()) onBack()
     }
 
     if (photos.isEmpty()) {
@@ -90,12 +108,19 @@ fun PhotoViewerScreen(
         return
     }
 
-    val safeStart = startIndex.coerceIn(0, photos.size - 1)
+    val actualStart = remember(photos, incomingUri, startIndex) {
+        if (incomingUri != null) {
+            val incoming = Uri.parse(incomingUri)
+            photos.indexOfFirst { it.uri == incoming }.coerceAtLeast(0)
+        } else {
+            startIndex.coerceIn(0, photos.size - 1)
+        }
+    }
 
     CompositionLocalProvider(LocalHazeState provides localHazeState) {
         ViewerContent(
             photos = photos,
-            startIndex = safeStart,
+            startIndex = actualStart,
             hazeState = localHazeState,
             onBack = onBack,
             onEdit = onEdit,
@@ -117,6 +142,10 @@ private fun ViewerContent(
     onDelete: (Photo) -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = startIndex) { photos.size }
+    val context = LocalContext.current
+
+    var showActions by remember { mutableStateOf(false) }
+    var showDetails by remember { mutableStateOf(false) }
 
     LaunchedEffect(photos.size) {
         if (photos.isNotEmpty() && pagerState.currentPage >= photos.size) {
@@ -146,10 +175,7 @@ private fun ViewerContent(
         Row(
             Modifier
                 .fillMaxWidth()
-                .hazeEffect(
-                    state = hazeState,
-                    style = glassHazeStyle()
-                )
+                .hazeEffect(state = hazeState, style = glassHazeStyle())
                 .background(LocalGlassColors.current.bgTop.copy(alpha = 0.35f))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -165,16 +191,57 @@ private fun ViewerContent(
             )
             Spacer(Modifier.width(8.dp))
             val current = photos.getOrNull(pagerState.currentPage)
-            if (current != null && !current.isVideo) {
-                IconButton(onClick = { onEdit(current.uri.toString()) }) {
-                    Icon(Icons.Filled.Tune, "Edit", tint = Color.White)
-                }
-            }
             if (current != null) {
-                IconButton(onClick = { onDelete(current) }) {
-                    Icon(Icons.Filled.Delete, "Delete", tint = Color.White)
+                IconButton(onClick = {
+                    val mime = context.contentResolver.getType(current.uri)
+                        ?: if (current.isVideo) "video/*" else "image/*"
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = mime
+                        putExtra(Intent.EXTRA_STREAM, current.uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Bagikan"))
+                }) {
+                    Icon(Icons.Filled.Share, "Share", tint = Color.White)
+                }
+                IconButton(onClick = { showActions = true }) {
+                    Icon(Icons.Filled.MoreVert, "More", tint = Color.White)
                 }
             }
+        }
+
+        val current = photos.getOrNull(pagerState.currentPage)
+
+        if (showActions && current != null) {
+            AlertDialog(
+                onDismissRequest = { showActions = false },
+                title = { Text("Aksi") },
+                text = {
+                    Column {
+                        if (!current.isVideo) {
+                            TextButton(onClick = {
+                                showActions = false
+                                onEdit(current.uri.toString())
+                            }) { Text("Edit") }
+                        }
+                        TextButton(onClick = {
+                            showActions = false
+                            showDetails = true
+                        }) { Text("Detail") }
+                        TextButton(onClick = {
+                            showActions = false
+                            onDelete(current)
+                        }) { Text("Hapus") }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showActions = false }) { Text("Batal") }
+                }
+            )
+        }
+
+        if (showDetails && current != null) {
+            MediaDetailsDialog(photo = current, onDismiss = { showDetails = false })
         }
     }
 }
